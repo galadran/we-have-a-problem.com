@@ -141,6 +141,15 @@ update-ca-certificates</pre>
   /etc/ca-certificates/trust-source/blocklist/emSign_ECC_Root_CA_-_G3.pem &amp;&amp;
 update-ca-trust</pre>
 
+<p>On NixOS, add to your configuration:</p>
+<pre>security.pki.caCertificateBlacklist = [
+  "emSign ECC Root CA - C3"
+  "emSign ECC Root CA - G3"
+  "emSign Root CA - C1"
+  "emSign Root CA - G1"
+  "Comodo AAA Services root"
+];</pre>
+
 <h2>What actions can trust store operators take?</h2>
 
 <p>Please see <a href="https://groups.google.com/a/mozilla.org/g/dev-security-policy/c/0R3XLJL6FuE">this thread</a> in Mozilla's dev-security-policy forum.</p>
