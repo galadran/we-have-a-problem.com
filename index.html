@@ -122,21 +122,6 @@ curl https://dv-g3b-aaa-emudhra.we-have-a-problem.com/</pre>
 
 <p>Add more at <a href="https://github.com/galadran/we-have-a-problem.com">github.com/galadran/we-have-a-problem.com</a>.</p>
 
-<h3>Are there workarounds for Windows?</h3>
-
-<p>Microsoft began rolling out blocks for these certificates on 20 October, as reported above. Windows distributes untrusted-certificate updates automatically; Microsoft's <a href="https://learn.microsoft.com/en-us/windows-server/identity/ad-cs/certificate-trust#automatic-certificate-trust-list-updates">automatic certificate trust list update documentation</a> describes this mechanism. This workaround is only needed to expedite protection on a machine that has not yet received the automatic block. No manual action is needed once that protection is in place.</p>
-
-<p><strong>This mitigation is not recommended for enterprise-managed devices.</strong> Your IT department will manage the rollout; contact them before applying local changes.</p>
-
-<p>To expedite protection, download and inspect <a href="Block-EmudhraCompromisedCA.ps1"><code>Block-EmudhraCompromisedCA.ps1</code></a>, then run it from an elevated PowerShell terminal. Requires PowerShell 5.1 or later. These commands bypass execution policy for this process only; they do not change the machine's policy. Organization-enforced policies may still prevent execution.</p>
-
-<pre>powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Block-EmudhraCompromisedCA.ps1 -WhatIf
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Block-EmudhraCompromisedCA.ps1</pre>
-
-<p>The script downloads the certificate manifest and validates all 16 pinned SHA-256 fingerprints before adding the compromised intermediates and their cross-signs to <code>LocalMachine\Disallowed</code> (Untrusted Certificates). It does not remove roots. <code>-WhatIf</code> validates the download without changing certificate stores.</p>
-
-<p>This mitigation applies to clients using the Windows operating system certificate trust stores and chain validation (including Schannel TLS and Authenticode). It adds blocks to Untrusted Certificates without modifying Trusted Root Certification Authorities. Applications using independent CA bundles still need their own updates. Keep Windows and browsers updated.</p>
-
 <h3 id="macos-curl"><a href="#macos-curl">Are there workarounds for macOS curl?</a></h3>
 
 <p>macOS blocks the compromised intermediates, but the built-in <code>/usr/bin/curl</code> verifies certificates against <code>/etc/ssl/cert.pem</code> without checking revocation, and that file has not been updated. To remove the affected roots from it, run:</p>
@@ -191,6 +176,20 @@ update-ca-trust</pre>
   "Comodo AAA Services root"
   "emSign ECC Root CA - G3"
 ];</pre>
+
+<h3 id="windows"><a href="#windows">Are there workarounds for Windows?</a></h3>
+
+<p>The status of Microsoft's automatic block is <a href="https://github.com/galadran/we-have-a-problem.com/issues/17">uncertain</a>. This script lets administrators block the compromised certificates locally.</p>
+
+<p><strong>This mitigation is not recommended for enterprise-managed devices.</strong> Your IT department will manage the rollout; contact them before applying local changes.</p>
+
+<p>Download and inspect <a href="Block-EmudhraCompromisedCA.ps1"><code>Block-EmudhraCompromisedCA.ps1</code></a>, then run it from an elevated PowerShell terminal. Requires PowerShell 5.1 or later and the built-in Windows PKI module. This command bypasses execution policy for this process only; it does not change the machine's policy. Organization-enforced policies may still prevent execution.</p>
+
+<pre>powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Block-EmudhraCompromisedCA.ps1</pre>
+
+<p>The script imports its 16 compromised intermediates and cross-signs into <code>LocalMachine\Disallowed</code> (Untrusted Certificates).</p>
+
+<p>This mitigation applies to clients using the Windows operating system certificate trust stores and chain validation (including Schannel TLS and Authenticode). It adds blocks to Untrusted Certificates without modifying Trusted Root Certification Authorities. Applications using independent CA bundles still need their own updates.</p>
 
 <h3 id="netbsd"><a href="#netbsd">Are there workarounds for NetBSD?</a></h3>
 
