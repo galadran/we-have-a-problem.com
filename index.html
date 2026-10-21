@@ -35,6 +35,7 @@
     .good { color: #090; }
     .bad { color: #c00; }
     .pending { color: #999; }
+    .warn { color: #c60; }
     small { color: #808080; }
     button { font: inherit; font-size: .9rem; padding: .2rem .6rem; }
   </style>
@@ -223,8 +224,8 @@ certctl rehash
 <script>
 // Hosts under test. Each intermediate is served twice: first chaining to its
 // emSign root, then via the Sectigo cross-sign chaining to AAA Certificate
-// Services. Each server must respond to GET / with
-// `Access-Control-Allow-Origin: *`.
+// Services. Each server should respond to GET / with 200 and
+// `Access-Control-Allow-Origin: *`; any other response still means TLS succeeded.
 const HOSTS = [
   { host: 'dv-g3b-emudhra.we-have-a-problem.com',     label: 'CN=EM DV TLS CA - G3B, O=eMudhra BV, C=NL', root: 'emSign Root TLS CA - G3' },
   { host: 'dv-g3c-emudhra.we-have-a-problem.com',     label: 'CN=EM DV TLS CA - G3C, O=eMudhra Inc, C=US', root: 'emSign Root TLS CA - G3' },
@@ -255,12 +256,20 @@ function cell(text, cls) {
 async function probe(host) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const url = `https://${host}/?t=${Date.now()}`;
   try {
-    const res = await fetch(`https://${host}/?t=${Date.now()}`, { cache: 'no-store', signal: controller.signal });
-    return res.ok ? { ok: true, text: '❌ Connected' } : { ok: false, text: `✅ Did not connect (HTTP ${res.status})` };
+    try {
+      const res = await fetch(url, { cache: 'no-store', signal: controller.signal });
+      return res.ok ? { state: 'connected', text: '❌ Connected' } : { state: 'unexpected', text: `⚠️ Connected, unexpected response (HTTP ${res.status})` };
+    } catch (err) {
+      if (err.name === 'AbortError') throw err;
+      // A CORS failure and a TLS failure look the same, so retry without CORS to tell them apart.
+      await fetch(url, { mode: 'no-cors', cache: 'no-store', signal: controller.signal });
+      return { state: 'unexpected', text: '⚠️ Connected, unexpected response (not readable)' };
+    }
   } catch (err) {
     // Browsers report TLS failures and network errors identically here.
-    return { ok: false, text: err.name === 'AbortError' ? '✅ Did not connect (timed out)' : '✅ Did not connect' };
+    return { state: 'rejected', text: err.name === 'AbortError' ? '✅ Did not connect (timed out)' : '✅ Did not connect' };
   } finally {
     clearTimeout(timer);
   }
@@ -284,11 +293,12 @@ async function run() {
   const results = await Promise.all(HOSTS.map(async ({ host }, i) => {
     const r = await probe(host);
     cells[i].textContent = r.text;
-    cells[i].className = r.ok ? 'bad' : 'good';
-    return r.ok;
+    cells[i].className = { connected: 'bad', unexpected: 'warn', rejected: 'good' }[r.state];
+    return r.state;
   }));
-  const n = results.filter(Boolean).length;
-  summary.textContent = `Your browser connected to ${n} of ${HOSTS.length} hosts.`;
+  const n = results.filter(s => s === 'connected').length;
+  const u = results.filter(s => s === 'unexpected').length;
+  summary.textContent = `Your browser connected to ${n} of ${HOSTS.length} hosts.` + (u ? ` ${u} more connected but returned an unexpected response.` : '');
   rerun.disabled = false;
 }
 
