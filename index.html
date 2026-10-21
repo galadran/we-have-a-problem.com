@@ -129,6 +129,7 @@ curl https://dv-g3b-aaa-emudhra.we-have-a-problem.com/</pre>
     <tr><td>Homebrew ca-certificates</td><td><a href="https://github.com/Homebrew/homebrew-core/blob/d02b8762f4a29859c47a635a0d2683223fea9812/Formula/c/ca-certificates.rb">2026-09-25_1</a></td></tr>
     <tr><td>Go</td><td><a href="https://groups.google.com/g/golang-announce/c/66pojueaQek">1.27.3, 1.26.10</a></td></tr>
     <tr><td>Node.js</td><td><a href="https://github.com/nodejs/node/releases/tag/v22.23.4">22.23.4</a>, <a href="https://github.com/nodejs/node/releases/tag/v24.22.1">24.22.1</a>, <a href="https://github.com/nodejs/node/releases/tag/v26.12.1">26.12.1</a></td></tr>
+    <tr><td>Java</td><td class="pending">No information available, see below</td></tr>
     <tr><td>Python certifi</td><td><a href="https://github.com/certifi/python-certifi/releases/tag/2026.10.19">2026.10.19</a></td></tr>
     <tr><td>pip</td><td><a href="https://github.com/pypa/pip/releases/tag/26.2.2">26.2.2</a></td></tr>
     <tr><td>uv</td><td><a href="https://github.com/astral-sh/uv/releases/tag/0.13.4">0.13.4</a></td></tr>
@@ -216,6 +217,26 @@ certctl untrust /usr/share/certs/mozilla/all/Comodo_AAA_Services_root.pem</pre>
 cp /etc/ssl/certs/14bc7599.0 /usr/share/certs/untrusted/14bc7599.pem
 cp /etc/ssl/certs/ee64a828.0 /usr/share/certs/untrusted/ee64a828.pem
 certctl rehash
+</pre>
+
+<h3 id="freebsd"><a href="#freebsd">Are there workarounds for Java?</a></h3>
+
+The <a href="https://ops.java/releases/">Oracle JDK patches</a> 27.0.1, 25.0.5, 21.0.13,
+17.0.21, 11.0.33, 8u511 released on Oct. 20th do <b>not include fixes</b>.
+
+<p>For Java, you can run the following commands to check if the certificates are still trusted:</p>
+<pre>
+keytool -list -cacerts -storepass changeit -v | grep --before 4 --after 9 -i "Owner:.*emSign"
+</pre>
+
+<p>You can manually remove certificates in the currently active Java installation by
+  running the following commands:</p>
+
+<pre>
+keytool -delete -alias debian:emsign_ecc_root_ca_-_c3.pem -cacerts -storepass changeit
+keytool -delete -alias debian:emsign_ecc_root_ca_-_g3.pem -cacerts -storepass changeit
+keytool -delete -alias debian:emsign_root_ca_-_c1.pem -cacerts -storepass changeit
+keytool -delete -alias debian:emsign_root_ca_-_g1.pem -cacerts -storepass changeit
 </pre>
 
 <hr>
