@@ -214,15 +214,24 @@ update-ca-trust</pre>
 trust extract --format=pem-bundle \
   --filter='pkcs11:object=Comodo%20AAA%20Services%20root;type=cert' \
   $d/Comodo_AAA_Services_root.pem &amp;&amp;
+openssl x509 -in $d/Comodo_AAA_Services_root.pem \
+  -out $d/Comodo_AAA_Services_root.pem \
+  -trustout -addreject anyExtendedKeyUsage &amp;&amp;
 trust extract --format=pem-bundle \
   --filter='pkcs11:object=emSign%20ECC%20Root%20CA%20-%20G3;type=cert' \
   $d/emSign_ECC_Root_CA_-_G3.pem &amp;&amp;
+openssl x509 -in $d/emSign_ECC_Root_CA_-_G3.pem \
+  -out $d/emSign_ECC_Root_CA_-_G3.pem \
+  -trustout -addreject anyExtendedKeyUsage &amp;&amp;
 update-ca-certificates</pre>
 
 <p>On Arch Linux, run as root:</p>
 <pre>trust extract --format=pem-bundle \
   --filter='pkcs11:object=emSign%20ECC%20Root%20CA%20-%20G3;type=cert' \
   /etc/ca-certificates/trust-source/blocklist/emSign_ECC_Root_CA_-_G3.pem &amp;&amp;
+openssl x509 -in /etc/ca-certificates/trust-source/blocklist/emSign_ECC_Root_CA_-_G3.pem \
+  -out /etc/ca-certificates/trust-source/blocklist/emSign_ECC_Root_CA_-_G3.pem \
+  -trustout -addreject anyExtendedKeyUsage &amp;&amp;
 update-ca-trust</pre>
 
 <p>On NixOS, add to your configuration:</p>
