@@ -78,6 +78,8 @@ openssl dgst -sha384 -verify EM-DV-TLS-CA-G3B.pub.pem -signature EM-DV-TLS-CA-G3
 
 <p>The CA has also revoked the compromised intermediate certificates. However, many other clients do not consume revocation information and require software updates to ensure they no longer trust the compromised intermediates.</p>
 
+<p>Java is one such client: it does not check revocation by default, so affected runtimes have to be updated. The <a href="https://github.com/AzulSystems/azul-jdk-xray">Azul JDK X-Ray</a> script finds the Java installations on a machine and flags any that predate the October 2026 updates. It works for any OpenJDK distribution, not just Azul's.</p>
+
 <h2 id="check"><a href="#check">Does your client still trust the compromised intermediates?</a></h2>
 
 <table id="results">
