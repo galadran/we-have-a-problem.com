@@ -304,9 +304,15 @@ async function probe(host) {
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
     const res = await fetch(`https://${host}/?t=${Date.now()}`, { cache: 'no-store', signal: controller.signal });
-    // Any HTTP response, even an error from an overloaded server, means the
-    // TLS handshake succeeded.
-    return { status: 'connected', text: res.ok ? '❌ Insecure' : `❌ Insecure (HTTP ${res.status})` };
+    console.log(res.headers);
+    const server = res.headers.get("server") || res.headers.get("Server") || "unknown server";
+    if (server == "GitHub.com") {
+      // Any HTTP response from GitHub pages, even an error from an overloaded server, means the
+      // TLS handshake succeeded.
+        return { status: 'connected', text: res.ok ? '❌ Insecure' : `❌ Insecure (HTTP ${res.status})` };
+    } else {
+      return { status: 'unknown', text: `⚠️ Inconclusive (request intercepted by ${server})` };
+    }
   } catch (err) {
     // A slow server is not evidence that the chain was rejected.
     if (err.name === 'AbortError') return { status: 'unknown', text: '⚠️ Inconclusive (timed out)' };
@@ -351,7 +357,7 @@ async function run() {
   const n = results.filter(s => s === 'connected').length;
   const unknown = results.filter(s => s === 'unknown').length;
   summary.textContent = `Your browser trusted ${n} of ${HOSTS.length} compromised certificate chains.` +
-    (unknown ? ` ${unknown} timed out, so the result is incomplete. Please try again later.` : '');
+    (unknown ? ` ${unknown} were inconclusive, so the result is incomplete.` : '');
 }
 
 // Disable the button until the run has finished and the cooldown has passed.
