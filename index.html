@@ -253,7 +253,16 @@ cp /etc/ssl/certs/14bc7599.0 /usr/share/certs/untrusted/14bc7599.pem
 cp /etc/ssl/certs/ee64a828.0 /usr/share/certs/untrusted/ee64a828.pem
 certctl rehash
 </pre>
+  
+<h3 id="solaris"><a href="#solaris">Are there workarounds for Solaris?</a></h3>
 
+<p>On Solaris 11, run the following commands as root:</p>
+<pre>
+svccfg -s svc:/system/ca-certificates:default addpropvalue config/exclude astring: Comodo_AAA_Services_root.pem
+svccfg -s svc:/system/ca-certificates:default addpropvalue config/exclude astring: emSign_ECC_Root_CA_-_G3.pem
+svcadm refresh -s svc:/system/ca-certificates:default
+</pre>
+  
 <hr>
 
 <p>Site published by <a href="https://github.com/dennisjackson">Dennis Jackson</a>. This site is the work of <a href="https://github.com/galadran/we-have-a-problem.com/graphs/contributors">many contributors</a> from the community. The source is on <a href="https://github.com/galadran/we-have-a-problem.com">GitHub</a> and PRs are welcome.</p>
