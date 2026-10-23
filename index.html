@@ -348,6 +348,38 @@ certctl rehash
 </pre>
 </details>
 
+<h3 id="qtwebengine"><a href="#qtwebengine">Are there workarounds for QtWebEngine based browsers (qutebrowser, KDE Falkon, ...)?</a></h3>
+<p>Run the <a href="https://codeberg.org/kerframil/distrust-emudhra/src/branch/master/distrust-emudhra">following script</a> as user:</p>
+
+<pre>
+#!/bin/sh
+
+# Distrust compromised eMudhra intermediates in the user's NSS database for
+# QtWebEngine and other NSS clients not yet blocking these certificates.
+# Requires curl(1) and certutil(1).
+
+set -e
+
+uri=https://raw.githubusercontent.com/chromium/chromium/da63b94c4ee/net/data/ssl/blocklist
+for sha256 in \
+	0164d7ceae5bb909c272af151ff44b1177ae9b47d9424b94f1d9558c30934d19 \
+	42c4accd12c4f59597925e1a08a7a90102608543809308d50ec427e118ba1493 \
+	432ec25f0d28de9006d97bf752f17bbb2cd41f669933fcb072d9a1148d0261f3 \
+	98b896625c0c230adeec3eb2cf6aad5001ecf9156a68644e82374ce5833bc25b \
+	cb6e15165ac802e9b3f993f16c25d41f4e81c21ebde71ae1b012ac00bf9c7c3f \
+	e7568fe6e12331f4fd7de61da4c7559d0f8eb192a218d4741a3ba75184333838 \
+	4b2460a466f95fd40113bcdcca2ceb29b3b093921de45474da7df48874c630b1 \
+	9e39de2881273acc225a149c72ba3e0f51424963669ab633ee1dc7df5db067b4
+do
+	pem=$(curl -fsS "$uri/$sha256.pem")
+	printf '%s\n' "$pem" |
+	certutil -d "sql:$HOME/.pki/nssdb" -A -a -t p,p,p -n "eMudhra $sha256"
+done
+
+# SPDX-License-Identifier: 0BSD
+# Copyright (c) 2026 Kerin Millar &lt;kfm@plushkava.net&gt;
+</pre>
+
 <hr>
 
 <p>Site published by <a href="https://github.com/dennisjackson">Dennis Jackson</a>. This site is the work of <a href="https://github.com/galadran/we-have-a-problem.com/graphs/contributors">many contributors</a> from the community. The source is on <a href="https://github.com/galadran/we-have-a-problem.com">GitHub</a> and PRs are welcome.</p>
