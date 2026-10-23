@@ -73,6 +73,7 @@
     pre { padding: .5rem 1rem; font-size: 0.8rem; overflow-x: auto; }
     code { padding: .1rem .25rem; font-size: 0.85em; word-break: break-all; }
     pre > code { padding: 0; }
+    #macos-curl img { max-width: 100%; height: auto; }
     .good { color: #090; }
     .bad { color: #c00; }
     .pending { color: #999; }
@@ -260,7 +261,7 @@ curl https://dv-g3b-aaa-noct-emudhra.we-have-a-problem.com/</pre>
 <h3 id="workarounds"><a href="#workarounds">Are there workarounds until patches are available?</a></h3>
 
 <details class="workaround" id="macos-curl">
-<summary><h4>macOS curl, git, and Python</h4></summary>
+<summary><h4>macOS</h4></summary>
 
 <p>macOS blocks the compromised intermediates, but the built-in <code translate="no">curl</code>, <code translate="no">git</code>, <code translate="no">python3</code>, <code translate="no">perl</code>, <code translate="no">ruby</code>, and <code translate="no">openssl</code> verify certificates against <code translate="no">/etc/ssl/cert.pem</code> without checking revocation, and that file has not been updated. To remove the affected roots from it, run:</p>
 <pre translate="no">sudo cp -p /etc/ssl/cert.pem /etc/ssl/cert.pem.bak &amp;&amp;
@@ -271,6 +272,21 @@ sudo awk '/^(###|===) /{skip=0}
 <pre translate="no">F="$(/usr/bin/python3 -c 'import sysconfig; print(sysconfig.get_path("stdlib"))')/sitecustomize.py" &amp;&amp;
 echo 'import os; os.environ.setdefault("PIP_CERT", "/etc/ssl/cert.pem")' | sudo tee -a "$F" &gt; /dev/null &amp;&amp;
 sudo chmod 644 "$F"</pre>
+
+<details class="workaround" id="macos-keychain">
+<summary><h4>Additional Keychain Access workaround</h4></summary>
+
+<p>Some macOS clients can still accept the emSign chain after the PEM workaround above, as <a href="https://github.com/galadran/we-have-a-problem.com/issues/65">reported in issue #65</a>. For an additional local block, you can set <code translate="no">emSign ECC Root CA - G3</code> to <strong>Never Trust</strong> in Keychain Access:</p>
+<ol>
+  <li><p>Press <strong>Command-Space</strong>, search for <strong>Keychain Access</strong>, and choose <strong>Open Keychain Access</strong>. Authenticate with Touch ID or your password if prompted.</p></li>
+  <li><p>Select <strong>System Roots</strong> &gt; <strong>Certificates</strong>, search for <strong>emSign</strong>, and double-click <strong translate="no">emSign ECC Root CA - G3</strong>.</p>
+    <p><img src="images/macos-keychain-root.png" alt="Keychain Access: emSign ECC Root CA - G3 selected in System Roots" width="1712" height="1000" loading="lazy"></p></li>
+  <li><p>Expand <strong>Trust</strong> and change <strong>When using this certificate</strong> to <strong>Never Trust</strong>. Close the certificate window and authenticate if prompted to save the change.</p>
+    <p><img src="images/macos-keychain-never-trust.png" alt="Certificate Trust menu showing the Never Trust option" width="998" height="852" loading="lazy"></p></li>
+</ol>
+<p>This blocks all chains through that root, including unrelated certificates. It does not block chains through <code translate="no">AAA Certificate Services</code>, and applications with their own CA bundles still need their own updates. To undo this change, restore the certificate's previous trust settings.</p>
+<p>After making changes, rerun the <a href="#check">browser and curl checks</a>. A connection failure alone does not prove that a certificate was rejected.</p>
+</details>
 
 <p>For nix-darwin users, please <strong>additionally</strong> follow NixOS instructions.</p>
 </details>
