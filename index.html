@@ -38,10 +38,10 @@
     td, th { padding: .25rem .5rem; border: 1px solid #ccc; text-align: left; vertical-align: top; }
     th { background: #f5f5f5; font-weight: bold; }
     .patched { width: auto; }
-    details.workaround { margin-top: 1rem; }
-    details.workaround > summary { cursor: pointer; }
-    details.workaround > summary > h4 { display: inline; margin: 0; }
-    details.workaround[open] > summary { margin-bottom: 1rem; }
+    details.workaround, details.check-tool { margin-top: 1rem; }
+    details.workaround > summary, details.check-tool > summary { cursor: pointer; }
+    details.workaround > summary > h4, details.check-tool > summary > h4 { display: inline; margin: 0; }
+    details.workaround[open] > summary, details.check-tool[open] > summary { margin-bottom: 1rem; }
     h4 { margin-top: 1.5rem; margin-bottom: .5rem; font-size: 1rem; font-weight: bold; }
     pre, code { font-family: Menlo, Consolas, monospace; background-color: #eee; }
     pre { padding: .5rem 1rem; font-size: 0.8rem; overflow-x: auto; }
@@ -224,6 +224,32 @@ curl https://dv-g3b-aaa-noct-emudhra.we-have-a-problem.com/</pre>
 </table>
 
 <p>Add more at <a href="https://github.com/galadran/we-have-a-problem.com">github.com/galadran/we-have-a-problem.com</a>.</p>
+
+<h3 id="check-tools"><a href="#check-tools">Check your tools</a></h3>
+
+<details class="check-tool" id="check-git">
+<summary><h4>Git</h4></summary>
+<pre>git ls-remote https://dv-g3b-emudhra.we-have-a-problem.com/
+git ls-remote https://dv-g3b-aaa-emudhra.we-have-a-problem.com/
+</pre>
+<p>If the commands above succeed, your Git setup can reach the affected servers.</p>
+</details>
+
+<details class="check-tool" id="check-python">
+<summary><h4>Python</h4></summary>
+<pre>python3 -c 'import urllib.request; urllib.request.urlopen("https://dv-g3b-emudhra.we-have-a-problem.com/")'
+python3 -c 'import urllib.request; urllib.request.urlopen("https://dv-g3b-aaa-emudhra.we-have-a-problem.com/")'
+</pre>
+<p>If the commands above succeed, your Python setup can reach the affected servers.</p>
+</details>
+
+<details class="check-tool" id="check-node">
+<summary><h4>Node.js</h4></summary>
+<pre>node -e 'require("https").get("https://dv-g3b-emudhra.we-have-a-problem.com/", res =&gt; console.log(res.statusCode))'
+node -e 'require("https").get("https://dv-g3b-aaa-emudhra.we-have-a-problem.com/", res =&gt; console.log(res.statusCode))'
+</pre>
+<p>If the commands above succeed, your Node.js setup can reach the affected servers.</p>
+</details>
 
 <h3 id="workarounds"><a href="#workarounds">Are there workarounds until patches are available?</a></h3>
 
