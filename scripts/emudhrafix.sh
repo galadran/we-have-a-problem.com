@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # eMudhra fix tool; baseline source: https://emudhra.we-have-a-problem.com/
 # Requires Bash 3.2+; do not run with sh. The finalized time is the baseline snapshot time, not the time of each run.
-SCRIPT_FINALIZED_AT='2026-10-23 15:22:30 Australia/Sydney (UTC+11:00)'
+SCRIPT_FINALIZED_AT='2026-10-25 19:32:30 Australia/Sydney (UTC+11:00)'
 # Checks only tools on PATH and the starting directory; project upgrades respect existing constraints and package sources.
 # --check shows skip reasons; in update mode items already compliant or not installed stay quiet.
 
@@ -349,14 +349,14 @@ upgradeUv() {
     for py in "${python_list[@]}"; do
         module_path=$("$py" -c 'import sysconfig; print(sysconfig.get_path("scripts"))' 2>/dev/null)
         if [[ $path = "$module_path/uv" ]] && "$py" -c 'import uv' 2>/dev/null; then
-            upgradePythonPackage "$py" uv 0.13.4; return
+            upgradePythonPackage "$py" uv 0.13.5; return
         fi
     done
     # The official self-update refuses non-official installations; fall back to the original package manager only after it fails.
     uv self update && return 0
     upgradeOwned uv
 }
-checkUv() { has uv && ensureVersion uv 0.13.4 getUv upgradeUv; }
+checkUv() { has uv && ensureVersion uv 0.13.5 getUv upgradeUv; }
 getRustup() { rustup --version 2>/dev/null | versionOf; }
 upgradeRustup() { rustup self update || upgradeOwned rustup; }
 checkRustup() { has rustup && ensureVersion Rustup 1.29.2 getRustup upgradeRustup; }
@@ -484,6 +484,106 @@ checkCastore() {
     has mix || { fail castore 'The dependency exists, but mix was not found.'; return; }
     ensureVersion castore 1.0.22 getCastore upgradeCastore
 }
+
+# Ruby excon ships its own certificate bundle; update through Bundler when a Gemfile.lock exists, and check the global gem separately.
+getExcon() {
+    local scope=${1:-local}
+    if [[ $scope = global ]]; then
+        gem list -e excon 2>/dev/null | sed -nE 's/^excon \(([0-9][^,)]*).*/\1/p' | head -n 1
+    elif [[ -f Gemfile.lock ]]; then
+        sed -nE 's/^[[:space:]]+excon \(([0-9][^)]*)\).*/\1/p' Gemfile.lock | head -n 1
+    fi
+}
+upgradeExcon() {
+    if [[ ${1:-local} = global ]]; then gem update excon
+    else bundle update excon; fi
+}
+checkExcon() {
+    local current
+    if [[ -f Gemfile.lock ]] && grep -qE '^[[:space:]]+excon \(' Gemfile.lock; then
+        if has bundle; then
+            ensureVersion 'Ruby excon' 1.8.0 getExcon upgradeExcon local
+        else fail 'Ruby excon' 'The lockfile contains excon, but bundle was not found.'; fi
+    fi
+    if has gem; then
+        current=$(getExcon global)
+        [[ -n $current ]] && ensureVersion 'Ruby excon (global)' 1.8.0 getExcon upgradeExcon global
+    fi
+}
+
+# The trust-manager default CA bundle is an image tag; this only reads the current project's Helm values/manifests and does not modify the cluster.
+trustPkgFind() {
+    # GNU find supports -maxdepth; BSD/macOS find does not, so use prune to avoid descending into dependency directories.
+    if find . -maxdepth 0 >/dev/null 2>&1; then
+        find . -maxdepth 5 -type f \( -name '*.yaml' -o -name '*.yml' -o -name '*.json' \) \
+            ! -path './.git/*' ! -path './node_modules/*' ! -path './vendor/*'
+    else
+        find . \( -name .git -o -name node_modules -o -name vendor \) -prune -o \
+            -type f \( -name '*.yaml' -o -name '*.yml' -o -name '*.json' \) -print
+    fi
+}
+trustPkgTags() {
+    has find || return
+    local file
+    trustPkgFind 2>/dev/null | while IFS= read -r file; do
+        awk '
+            /trust-pkg-debian-trixie/ { flavor = "trust-pkg-debian-trixie" }
+            /trust-pkg-debian-bookworm/ { flavor = "trust-pkg-debian-bookworm" }
+            {
+                if (match($0, /trust-pkg-debian-(trixie|bookworm):[0-9A-Za-z._-]+/)) {
+                    print substr($0, RSTART, RLENGTH)
+                } else if (flavor != "" && match($0, /tag:[ \t]*"?[0-9][0-9A-Za-z._-]*/)) {
+                    tag = substr($0, RSTART, RLENGTH)
+                    sub(/^tag:[ \t]*"?/, "", tag)
+                    print flavor ":" tag
+                }
+            }
+        ' "$file"
+    done | sort -u
+}
+trustPkgGe() {
+    awk -v a="$1" -v b="$2" 'BEGIN {
+        split(a, x, "-deb"); split(b, y, "-deb");
+        if ((x[1] + 0) > (y[1] + 0)) exit 0
+        if ((x[1] + 0) < (y[1] + 0)) exit 1
+        split(x[2], xa, "u"); split(y[2], ya, "u");
+        if ((xa[1] + 0) > (ya[1] + 0)) exit 0
+        if ((xa[1] + 0) < (ya[1] + 0)) exit 1
+        split(xa[2], xp, "."); split(ya[2], yp, ".");
+        n = (length(xp) > length(yp)) ? length(xp) : length(yp);
+        for (i = 1; i <= n; i++) {
+            xi = (i in xp) ? (xp[i] + 0) : 0
+            yi = (i in yp) ? (yp[i] + 0) : 0
+            if (xi > yi) exit 0
+            if (xi < yi) exit 1
+        }
+        exit 0
+    }'
+}
+checkCertManagerTrust() {
+    local tags tag version flavor minimum seen='|'
+    has find || return
+    tags=$(trustPkgTags)
+    if [[ -z $tags ]]; then
+        reportSkip 'Kubernetes cert-manager trust bundle' 'No reference to the trust-manager default CA bundle was found in the current directory; verify the cluster side manually.'
+        return
+    fi
+    while IFS= read -r tag; do
+        [[ -n $tag ]] || continue
+        [[ $seen = *"|$tag|"* ]] && continue; seen="$seen$tag|"
+        flavor=${tag%%:*}; version=${tag#*:}
+        case "$flavor" in
+            trust-pkg-debian-trixie) minimum='20250419-deb13u1.0';;
+            trust-pkg-debian-bookworm) minimum='20250419-deb12u2.0';;
+            *) continue;;
+        esac
+        if trustPkgGe "$version" "$minimum"; then
+            reportSkip 'Kubernetes cert-manager trust bundle' "Reference [$tag] already satisfies [$minimum]."
+        else
+            fail 'Kubernetes cert-manager trust bundle' "Reference [$tag] is below [$flavor:$minimum]; upgrade it through defaultPackageImage.tag in the Helm values; the script does not modify the cluster."
+        fi
+    done <<< "$tags"
+}
 getPerlCa() { perl -MMozilla::CA -e 'print $Mozilla::CA::VERSION' 2>/dev/null; }
 upgradePerlCa() {
     if has cpanm; then cpanm 'Mozilla::CA~>=20261020'
@@ -579,7 +679,43 @@ getGuixCommit() {
 
 # Pending items keep their own entry points; once upstream publishes a fix, only the corresponding function and version need to be filled in.
 checkBottlerocket() { reportSkip Bottlerocket 'Still pending in the patch table; no fixed version is configured yet.'; }
-checkErlangCertifi() { reportSkip 'Erlang certifi' 'Still pending in the patch table; no fixed version is configured yet.'; }
+checkGodot() { reportSkip Godot 'Still pending in the patch table; no fixed version is configured yet.'; }
+checkLibreOffice() { reportSkip LibreOffice 'Still pending in the patch table; no fixed version is configured yet.'; }
+
+# Erlang certifi is a Hex package; only the rebar/mix dependencies of the current directory are handled, Python certifi is untouched.
+erlangCertifiPresent() {
+    { [[ -f mix.lock ]] && grep -q '"certifi"' mix.lock; } ||
+        { [[ -f rebar.lock ]] && grep -q '<<"certifi">>' rebar.lock; } ||
+        { [[ -f rebar.config ]] && grep -q '{certifi,' rebar.config; }
+}
+getErlangCertifi() {
+    local version=''
+    if [[ -f mix.lock ]]; then
+        version=$(sed -nE 's/.*"certifi"[[:space:]]*:[[:space:]]*\{:hex,[[:space:]]*:certifi,[[:space:]]*"([^"]+)".*/\1/p' mix.lock | head -n 1)
+    fi
+    if [[ -z $version && -f rebar.lock ]]; then
+        version=$(sed -nE 's/.*\{<<"certifi">>,\{pkg,<<"certifi">>,<<"([^"]+)">>\}.*/\1/p' rebar.lock | head -n 1)
+    fi
+    if [[ -z $version && -f rebar.config ]]; then
+        version=$(sed -nE 's/.*\{certifi,[[:space:]]*"([^"]+)".*/\1/p' rebar.config | head -n 1)
+    fi
+    [[ -n $version ]] || return 1
+    printf '%s\n' "$version"
+}
+upgradeErlangCertifi() {
+    if [[ -f mix.lock ]] && grep -q '"certifi"' mix.lock; then
+        has mix || { echo 'The current directory has a certifi dependency, but mix was not found.' >&2; return 1; }
+        mix deps.update certifi
+    else
+        has rebar3 || { echo 'The current directory has a certifi dependency, but rebar3 was not found.' >&2; return 1; }
+        rebar3 upgrade certifi
+    fi
+}
+checkErlangCertifi() {
+    erlangCertifiPresent || return
+    getErlangCertifi >/dev/null || { fail 'Erlang certifi' 'Could not parse the certifi version from the lockfile.'; return; }
+    ensureVersion 'Erlang certifi' 2.18.0 getErlangCertifi upgradeErlangCertifi
+}
 
 # Devuan 5/6 use the Debian 12/13 package versions respectively; do not concatenate the Devuan major version with a deb suffix.
 checkDevuan() {
@@ -724,6 +860,90 @@ checkOpenbsd() {
     fi
 }
 
+# pkgsrc packages and the NetBSD base cert.pem are two separate trust stores; only the pkgsrc package is handled here.
+netbsdCaVersion() {
+    local listing
+    listing=$(pkg_info -a 2>/dev/null) || listing=$(pkg_info 2>/dev/null)
+    printf '%s\n' "$listing" | awk '$1 ~ /^ca-certificates-/ {sub(/^ca-certificates-/, "", $1); print $1; exit}'
+}
+netbsdCaSatisfied() {
+    local current
+    current=$(netbsdCaVersion)
+    [[ -n $current ]] || return 1
+    # pkgsrc versions look like 20260601nb1; compare by date and nb revision, and do not assume pkg_info -e supports relational operators.
+    awk -v v="$current" 'BEGIN {
+        split(v, a, "nb"); split(a[1], x, ".");
+        if ((x[1] + 0) > 20260601) exit 0
+        if ((x[1] + 0) < 20260601) exit 1
+        if ((a[2] + 0) >= 1) exit 0
+        exit 1
+    }'
+}
+upgradeNetbsdCa() {
+    if has pkgin; then rootRun pkgin -y upgrade ca-certificates
+    elif has pkg_rolling-replace; then rootRun pkg_rolling-replace -u ca-certificates
+    else
+        echo 'pkgin or pkg_rolling-replace was not found; upgrade security/ca-certificates the pkgsrc way.' >&2
+        return 1
+    fi
+}
+checkNetbsd() {
+    [[ $(uname -s) = NetBSD ]] || return
+    has pkg_info || return
+    local current
+    current=$(netbsdCaVersion)
+    [[ -n $current ]] || { reportSkip 'NetBSD ca-certificates' 'The pkgsrc security/ca-certificates package is not installed.'; return; }
+    if netbsdCaSatisfied; then
+        reportSkip 'NetBSD ca-certificates' "Version [$current] already satisfies [20260601nb1] (pkgsrc revision)."
+        return
+    fi
+    beginUpdate 'NetBSD ca-certificates' "$current" '20260601nb1' || return
+    if runQuiet upgradeNetbsdCa && netbsdCaSatisfied; then
+        finishUpdate "$(netbsdCaVersion)"
+    else
+        updateFailed 'NetBSD ca-certificates' 'The pkgsrc package did not reach 20260601nb1; the base cert.pem still needs a system update or the manual workaround from the page.'
+    fi
+}
+
+# Oracle Linux and RHEL use ca-certificates fixed-version strings that differ from Fedora and cannot be reused across them.
+oracleLinuxTarget() {
+    case "${1%%.*}" in
+        8) echo '2025.2.80_v9.0.304-80.2.0.1.el8_10';;
+        9) echo '2025.2.80_v9.0.305-91.0.1.el9';;
+        10) echo '2025.2.80_v9.0.305-102.0.1.el10_2';;
+        *) return 1;;
+    esac
+}
+checkOracleLinux() {
+    [[ $os_id = ol ]] || return
+    local minimum
+    minimum=$(oracleLinuxTarget "$os_version") || {
+        fail 'Oracle Linux ca-certificates' "No fixed baseline is listed for [$os_version]; check the Oracle Linux advisories."
+        return
+    }
+    ensurePackage rpm ca-certificates "$minimum"
+}
+rhelTarget() {
+    case "${1%%.*}" in
+        8) echo '2026.2.92_v9.0.319-81.3.el8_10';;
+        9) echo '2026.2.92_v9.0.319-90.3.el9_8';;
+        10) echo '2026.2.92_v9.0.319-100.3.el10_2';;
+        *) return 1;;
+    esac
+}
+checkRhel() {
+    [[ $os_id = rhel ]] || return
+    local minimum
+    case "${os_version%%.*}" in
+        7) reportSkip 'RHEL ca-certificates' 'RHEL 7 is still pending and only has yum; watch RHSA manually.'; return;;
+    esac
+    minimum=$(rhelTarget "$os_version") || {
+        fail 'RHEL ca-certificates' "No fixed baseline is listed for [$os_version]; check the Red Hat advisories."
+        return
+    }
+    ensurePackage rpm ca-certificates "$minimum"
+}
+
 normalizeJava() {
     local version=${1%%+*}
     if [[ $version =~ ^1\.8\.0_([0-9]+)(-b[0-9]+)?$ ]]; then echo "8.0.${BASH_REMATCH[1]}"
@@ -750,12 +970,27 @@ upgradeJava() {
     [[ -x $java_dir/bin/java ]] || { echo 'Could not locate the installation directory of the active Java.' >&2; return 1; }
     upgradeOwned "$java_dir/bin/java"
 }
+# On Debian-family systems ca-certificates-java does not rebuild the keystore automatically; even when the system certificates are updated, the Java trust store still needs separate verification.
+checkJavaKeystore() {
+    local listing
+    case "$os_id" in debian|devuan|ubuntu) ;; *) return;; esac
+    has keytool || { reportSkip 'Java keystore' 'keytool was not found, so the system Java keystore cannot be verified.'; return; }
+    listing=$(keytool -list -cacerts -storepass changeit 2>/dev/null) || {
+        reportSkip 'Java keystore' 'Could not read cacerts with the default password; verify or rebuild the keystore manually.'; return
+    }
+    if printf '%s\n' "$listing" | grep -qiE 'emsign|comodoaaaca'; then
+        fail 'Java keystore' 'The Java keystore still contains the revoked root; as root run rm -f /etc/ssl/certs/java/cacerts && update-ca-certificates --fresh, then restart Java applications.'
+    else
+        reportSkip 'Java keystore' 'No revoked root aliases were found.'
+    fi
+}
 checkJava() {
     has java || return
     local current minimum
     current=$(getJava) || { fail Java 'Could not read the full runtime version of the active Java.'; return; }
     minimum=$(javaTarget "$current") || { fail Java "No fixed version is listed for branch [$current]; use a branch supported by the original vendor."; return; }
     ensureVersion Java "$minimum" getJava upgradeJava
+    checkJavaKeystore
 }
 
 getPixi() { pixi --version | versionOf; }
@@ -790,6 +1025,37 @@ upgradeBun() {
 }
 checkBun() { has bun && ensureVersion Bun 1.4.4 getBun upgradeBun; }
 
+# Dart / Flutter: when Flutter ships its own Dart, only the Flutter SDK is checked so the bundled Dart is not treated as a separate installation.
+getFlutter() { flutter --version 2>&1 | sed -nE 's/^Flutter ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' | head -n 1; }
+getDart() { dart --version 2>&1 | versionOf; }
+dartBundledByFlutter() {
+    local dart_path flutter_path
+    dart_path=$(command -v dart) || return 1
+    flutter_path=$(command -v flutter) || return 1
+    if has readlink; then
+        dart_path=$(readlink -f "$dart_path" 2>/dev/null || printf '%s' "$dart_path")
+        flutter_path=$(readlink -f "$flutter_path" 2>/dev/null || printf '%s' "$flutter_path")
+    fi
+    [[ $(dirname "$dart_path") = "$(dirname "$flutter_path")" ]]
+}
+upgradeFlutter() { flutter upgrade; }
+upgradeDart() {
+    if has flutter && dartBundledByFlutter; then flutter upgrade; return; fi
+    upgradeOwned dart
+}
+checkDartFlutter() {
+    if has flutter; then
+        ensureVersion Flutter 3.47.8 getFlutter upgradeFlutter
+    fi
+    if has dart; then
+        if has flutter && dartBundledByFlutter; then
+            reportSkip Dart 'Provided by the Flutter SDK; checked/upgraded with Flutter.'
+        else
+            ensureVersion Dart 3.13.7 getDart upgradeDart
+        fi
+    fi
+}
+
 getConda() { conda --version 2>/dev/null | versionOf; }
 upgradeConda() {
     # Official update command; keep the user's existing channel configuration and do not add a default channel.
@@ -797,11 +1063,106 @@ upgradeConda() {
 }
 checkConda() { has conda && ensureVersion Conda 26.9.4 getConda upgradeConda; }
 
-# ArgoCD CLI and in-cluster server versions are handled separately: only the local CLI is changed safely; the server is only reported.
+# Obsidian is an Electron app: the application itself must be updated; updating system certificates is not a substitute.
+getObsidian() {
+    local version=''
+    case "$(uname -s)" in
+        Darwin)
+            [[ -r /Applications/Obsidian.app/Contents/Info.plist ]] || return 1
+            has defaults || return 1
+            version=$(defaults read /Applications/Obsidian.app/Contents/Info.plist CFBundleShortVersionString 2>/dev/null)
+            ;;
+        Linux)
+            if has flatpak; then
+                version=$(LC_ALL=C flatpak info md.obsidian.Obsidian 2>/dev/null | sed -nE 's/^[[:space:]]*Version:[[:space:]]*([0-9][0-9.]*).*/\1/p' | head -n 1)
+            elif has snap; then
+                version=$(snap list obsidian 2>/dev/null | awk '$1 == "obsidian" {print $2; exit}')
+            fi
+            ;;
+        *) return 1;;
+    esac
+    [[ -n $version ]] || return 1
+    printf '%s\n' "$version"
+}
+upgradeObsidian() {
+    case "$(uname -s)" in
+        Darwin)
+            if has brew && brew list --cask obsidian >/dev/null 2>&1; then
+                brew update && brew upgrade --cask obsidian; return
+            fi;;
+        Linux)
+            if has flatpak; then flatpak update --noninteractive md.obsidian.Obsidian; return; fi
+            if has snap; then rootRun snap refresh obsidian; return; fi;;
+    esac
+    echo 'Use the in-app Obsidian update or reinstall from the official installer; restart the app after upgrading.' >&2
+    return 1
+}
+checkObsidian() {
+    getObsidian >/dev/null 2>&1 || return
+    ensureVersion Obsidian 1.14.5 getObsidian upgradeObsidian
+}
+
+# VS Code is also an Electron app; Insiders and stable are not mixed, only stable is compared here.
+getVSCode() {
+    local version=''
+    if has code; then version=$(code --version 2>/dev/null | head -n 1); fi
+    if [[ -z $version && $(uname -s) = Darwin && -r '/Applications/Visual Studio Code.app/Contents/Info.plist' ]] && has defaults; then
+        version=$(defaults read '/Applications/Visual Studio Code.app/Contents/Info.plist' CFBundleShortVersionString 2>/dev/null)
+    fi
+    [[ -n $version ]] || return 1
+    printf '%s\n' "$version"
+}
+upgradeVSCode() {
+    if has brew && brew list --cask visual-studio-code >/dev/null 2>&1; then
+        brew update && brew upgrade --cask visual-studio-code; return
+    fi
+    if has snap && snap list code >/dev/null 2>&1; then rootRun snap refresh code; return; fi
+    upgradeOwned code
+}
+checkVSCode() {
+    getVSCode >/dev/null 2>&1 || return
+    ensureVersion 'Visual Studio Code' 1.143.1 getVSCode upgradeVSCode
+}
+
+getGitHubCli() { gh --version 2>/dev/null | versionOf; }
+upgradeGitHubCli() { upgradeOwned gh; }
+checkGitHubCli() { has gh && ensureVersion 'GitHub CLI' 2.102.1 getGitHubCli upgradeGitHubCli; }
+
+# mitmproxy may be installed by pipx / uv tool / pip / Homebrew, etc.; return to the original install entry point first.
+getMitmproxy() {
+    if has mitmproxy; then mitmproxy --version 2>/dev/null | versionOf
+    elif has mitmdump; then mitmdump --version 2>/dev/null | versionOf
+    fi
+}
+upgradeMitmproxy() {
+    local path py
+    path=$(command -v mitmproxy || command -v mitmdump)
+    if has pipx && pipx list --short 2>/dev/null | grep -qE '^mitmproxy( |$)'; then pipx upgrade mitmproxy; return; fi
+    if has uv && uv tool list 2>/dev/null | grep -qE '^mitmproxy( |$)'; then uv tool upgrade mitmproxy; return; fi
+    if upgradeOwned mitmproxy >/dev/null 2>&1; then return 0; fi
+    py=$(sed -n '1s/^#![[:space:]]*//p' "$path" | awk '{print $1}')
+    if [[ -n $py && -x $py ]]; then "$py" -m pip install --upgrade mitmproxy; return; fi
+    echo 'Could not determine how mitmproxy was installed; upgrade it with pipx / uv tool / pip / your package manager.' >&2
+    return 1
+}
+checkMitmproxy() {
+    has mitmproxy || has mitmdump || return
+    ensureVersion mitmproxy 12.3 getMitmproxy upgradeMitmproxy
+}
+
+# ArgoCD CLI and server versions are separate: the page lists versions on the three stable release lines 3.3 / 3.4 / 3.5, so a single global minimum must not be compared.
+argocdTarget() {
+    case "${1%.*}" in
+        3.3) echo 3.3.18;;
+        3.4) echo 3.4.12;;
+        3.5) echo 3.5.6;;
+        *) return 1;;
+    esac
+}
 getArgocd() { argocd version --client --short 2>/dev/null | versionOf; }
 upgradeArgocd() { upgradeOwned argocd; }
 checkArgocdServer() {
-    local image server
+    local image server minimum
     has kubectl || { reportSkip 'ArgoCD server' 'kubectl was not found; verify the server version on the cluster side according to the deployment method.'; return; }
     image=$(kubectl -n argocd get deployment argocd-server -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null)
     if [[ -z $image ]]; then
@@ -809,11 +1170,25 @@ checkArgocdServer() {
     fi
     if [[ $image =~ :v?([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then server=${BASH_REMATCH[1]}
     else reportSkip 'ArgoCD server' "Image [$image] does not use a comparable version tag; confirm manually."; return; fi
-    if versionGe "$server" 3.3.18; then reportSkip 'ArgoCD server' "Image [$image] already satisfies the requirement."
-    else fail 'ArgoCD server' "Image [$image] is below 3.3.18; upgrade it through Helm/deployment manifests, the script does not modify the cluster automatically."; fi
+    minimum=$(argocdTarget "$server") || {
+        fail 'ArgoCD server' "The release line of image [$image] has no stable fixed version (3.6 currently only has RCs); manual confirmation is required."
+        return
+    }
+    if versionGe "$server" "$minimum"; then reportSkip 'ArgoCD server' "Image [$image] already satisfies [$minimum]."
+    else fail 'ArgoCD server' "Image [$image] is below [$minimum]; upgrade it through Helm/deployment manifests, the script does not modify the cluster automatically."; fi
 }
 checkArgocd() {
-    has argocd && ensureVersion 'ArgoCD CLI' 3.3.18 getArgocd upgradeArgocd
+    local current minimum
+    if has argocd; then
+        current=$(getArgocd) || { fail 'ArgoCD CLI' 'Could not read the CLI version.'; }
+        if [[ -n ${current:-} ]]; then
+            minimum=$(argocdTarget "$current") || {
+                fail 'ArgoCD CLI' "Branch [$current] has no listed stable fixed version (3.6 currently only has RCs; pre-releases are not accepted as proof of a fix)."
+                minimum=
+            }
+            [[ -n $minimum ]] && ensureVersion 'ArgoCD CLI' "$minimum" getArgocd upgradeArgocd
+        fi
+    fi
     has kubectl && checkArgocdServer
 }
 
@@ -831,6 +1206,10 @@ getDockerDesktop() {
             has docker || return 1
             version=$(docker desktop version 2>/dev/null | versionOf) || return 1
             ;;
+        MINGW*|MSYS*|CYGWIN*)
+            has docker || return 1
+            version=$(docker desktop version 2>/dev/null | versionOf) || return 1
+            ;;
         *) return 1;;
     esac
     [[ -n $version ]] || return 1
@@ -845,17 +1224,66 @@ upgradeDockerDesktop() {
             elif has dnf; then rootRun dnf upgrade -y docker-desktop; return
             elif has pacman; then rootRun pacman -Syu --needed --noconfirm docker-desktop; return
             fi;;
+        MINGW*|MSYS*|CYGWIN*)
+            if has winget; then winget upgrade --id Docker.DockerDesktop --exact --disable-interactivity; return; fi;;
     esac
     # Do not restart the user's engine on our own; when auto-update is not possible, hand back to the in-app update.
     echo 'Use the Docker Desktop in-app update or the original installer; Docker Desktop must be restarted after the upgrade for it to take effect.' >&2
     return 1
 }
 checkDockerDesktop() {
-    [[ $(uname -s) = Darwin || $(uname -s) = Linux ]] || return
+    case "$(uname -s)" in Darwin|Linux|MINGW*|MSYS*|CYGWIN*) ;; *) return;; esac
     getDockerDesktop >/dev/null 2>&1 || return
     local before=${updated:-0}
     ensureVersion 'Docker Desktop' 4.96.2 getDockerDesktop upgradeDockerDesktop
     [[ ${updated:-0} != "$before" ]] && printf 'Note: Docker Desktop must be restarted before the new version is used.\n'
+}
+
+# Docker Engine / CLI is handled separately from Desktop; Desktop-managed installations are upgraded with Desktop and not processed twice.
+getDockerEngine() { docker version --format '{{.Server.Version}}' 2>/dev/null; }
+getDockerCli() { docker --version 2>/dev/null | versionOf; }
+upgradeDockerEngine() {
+    if has dockerd; then upgradeOwned dockerd; return; fi
+    echo 'dockerd was not found; the Engine may be managed by Docker Desktop, a remote daemon, or a container, so it cannot be upgraded automatically.' >&2
+    return 1
+}
+upgradeDockerCli() { upgradeOwned docker; }
+checkDockerEngine() {
+    has docker || return
+    if getDockerDesktop >/dev/null 2>&1; then
+        reportSkip 'Docker Engine' 'Managed by Docker Desktop; upgraded with Desktop.'; return
+    fi
+    local current
+    current=$(getDockerEngine)
+    [[ -n $current ]] || { fail 'Docker Engine' 'Cannot connect to the Docker daemon, so the Engine version cannot be verified.'; return; }
+    ensureVersion 'Docker Engine' 29.9.2 getDockerEngine upgradeDockerEngine
+}
+checkDockerCli() {
+    has docker || return
+    if getDockerDesktop >/dev/null 2>&1; then
+        reportSkip 'Docker CLI' 'Managed by Docker Desktop; upgraded with Desktop.'; return
+    fi
+    ensureVersion 'Docker CLI' 29.9.2 getDockerCli upgradeDockerCli
+}
+
+# The Git for Windows version string is X.Y.Z.windows.N; it cannot be handled like a plain dot-separated version that takes only the first three segments.
+getGitForWindows() {
+    git --version 2>/dev/null | sed -nE 's/.* ([0-9]+\.[0-9]+\.[0-9]+)\.windows\.([0-9]+).*/\1.\2/p' | head -n 1
+}
+upgradeGitForWindows() {
+    if has winget; then winget upgrade --id Git.Git --exact --disable-interactivity; return; fi
+    if has choco; then choco upgrade git -y; return; fi
+    if has scoop; then scoop update git; return; fi
+    echo 'winget/choco/scoop was not found; upgrade with the original Git for Windows installer.' >&2
+    return 1
+}
+checkGitForWindows() {
+    case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) ;; *) return;; esac
+    has git || return
+    local current
+    current=$(getGitForWindows)
+    [[ -n $current ]] || { reportSkip 'Git for Windows' 'The current git has no windows version suffix, so it is not Git for Windows.'; return; }
+    ensureVersion 'Git for Windows' 2.56.0.3 getGitForWindows upgradeGitForWindows
 }
 
 # Handlers that produce no result explain the reason at the actual check entry point; not installed and not applicable are not conflated with fixed.
@@ -888,6 +1316,9 @@ invokeCheck() {
         checkFreedesktop) label='Freedesktop SDK'; reason='Flatpak was not found, or no Freedesktop SDK/Platform runtime is installed.';;
         checkOmnios) label='OmniOS web/ca-bundle'; reason='This system is not OmniOS.';;
         checkOpenbsd) label='OpenBSD cert.pem'; reason='This system is not OpenBSD.';;
+        checkNetbsd) label='NetBSD ca-certificates'; reason='The current system is not NetBSD.';;
+        checkOracleLinux) label='Oracle Linux CA package'; reason='The current distribution is not Oracle Linux.';;
+        checkRhel) label='RHEL CA package'; reason='The current distribution is not RHEL.';;
         checkJava) label=Java; reason='java was not found on PATH.';;
         checkPixi) label=pixi; reason='pixi was not found on PATH.';;
         checkClaude) label='Claude Code'; reason='claude was not found on PATH.';;
@@ -897,6 +1328,17 @@ invokeCheck() {
         checkConda) label=Conda; reason='conda was not found on PATH.';;
         checkArgocd) label='ArgoCD CLI'; reason='argocd was not found on PATH.';;
         checkDockerDesktop) label='Docker Desktop'; reason='No recognizable Docker Desktop installation was found on this system or install path.';;
+        checkDockerEngine) label='Docker Engine'; reason='docker was not found on PATH, or no verifiable Engine can be connected.';;
+        checkDockerCli) label='Docker CLI'; reason='docker was not found on PATH.';;
+        checkGitForWindows) label='Git for Windows'; reason='The current system is not Windows, or Git for Windows was not found.';;
+        checkExcon) label='Ruby excon'; reason='The current project has no recognizable excon dependency and no global gem was found.';;
+        checkCertManagerTrust) label='Kubernetes cert-manager trust bundle'; reason='No reference to the trust-manager default CA bundle was found in the current directory.';;
+        checkDartFlutter) label='Dart / Flutter'; reason='dart or flutter was not found on PATH.';;
+        checkObsidian) label=Obsidian; reason='No recognizable Obsidian installation was found.';;
+        checkVSCode) label='Visual Studio Code'; reason='code was not found on PATH and no known installation was found.';;
+        checkGitHubCli) label='GitHub CLI'; reason='gh was not found on PATH.';;
+        checkMitmproxy) label=mitmproxy; reason='mitmproxy/mitmdump was not found on PATH.';;
+        checkErlangCertifi) label='Erlang certifi'; reason='The current directory has no recognizable rebar/mix certifi dependency.';;
         checkPypiAction) label='pypi-publish GitHub Action'; reason='The workflows of the current project contain no reference to this Action.';;
         checkPythonRuntime) label='Python runtime'; reason='No usable Python interpreter was found in the checked scope.';;
         *) label=$handler; reason='No applicable installation was found.';;
@@ -939,6 +1381,9 @@ main() {
     invokeCheck checkGuix; 
     invokeCheck checkOmnios;
     invokeCheck checkOpenbsd; 
+    invokeCheck checkNetbsd;
+    invokeCheck checkOracleLinux;
+    invokeCheck checkRhel;
     invokeCheck checkBottlerocket;
     invokeCheck checkNss; 
     invokeCheck checkCurlBundle; 
@@ -958,17 +1403,29 @@ main() {
     invokeCheck checkRustup;
     invokeCheck checkElectron; 
     invokeCheck checkBun; 
+    invokeCheck checkDartFlutter;
     invokeCheck checkClaude;
     invokeCheck checkArgocd; 
     invokeCheck checkDockerDesktop;
+    invokeCheck checkDockerEngine;
+    invokeCheck checkDockerCli;
+    invokeCheck checkGitForWindows;
     invokeCheck checkComposer; 
     invokeCheck checkCastore; 
+    invokeCheck checkExcon;
+    invokeCheck checkCertManagerTrust;
     invokeCheck checkErlangCertifi;
     invokeCheck checkMise; 
     invokeCheck checkPypiAction; 
     invokeCheck checkPerlCa;
     invokeCheck checkDeno; 
     invokeCheck checkConda;
+    invokeCheck checkObsidian;
+    invokeCheck checkVSCode;
+    invokeCheck checkGodot;
+    invokeCheck checkGitHubCli;
+    invokeCheck checkLibreOffice;
+    invokeCheck checkMitmproxy;
     printf 'Done: %s upgraded; %s pending; %s skipped; %s errors/unverified.\n' "$updated" "$pending" "$skipped" "$errors"
     [[ $errors = 0 && $pending = 0 ]]
 }

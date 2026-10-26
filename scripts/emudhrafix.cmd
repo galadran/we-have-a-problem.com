@@ -270,7 +270,7 @@ function pythonTarget([string]$branch) {
     }
 }
 function getPythonRuntime([string]$py) {
-    return (readNative $py @('-c', 'import sys; v=sys.version_info; print("%d.%d.%d" % v[:3] if v.releaselevel=="final" else "%d.%d.%d%s%d" % (v.major,v.minor,v.micro,v.releaselevel,v.serial))')).Trim()
+    return (readNative $py @('-c', "import sys; v=sys.version_info; print('%d.%d.%d' % v[:3] if v.releaselevel=='final' else '%d.%d.%d%s%d' % (v.major,v.minor,v.micro,v.releaselevel,v.serial))")).Trim()
 }
 function upgradePythonRuntime([string]$py, [string]$target) {
     $prefix = (readNative $py @('-c', 'import sys; print(sys.prefix)')).Trim()
@@ -278,7 +278,7 @@ function upgradePythonRuntime([string]$py, [string]$target) {
     if ((Test-Path -LiteralPath (Join-Path $prefix 'conda-meta')) -and (findTool conda)) {
         runNative conda @('update', '--prefix', $prefix, '--yes', 'python'); return
     }
-    $path = (readNative $py @('-c', 'import sys; print(getattr(sys, "_base_executable", sys.executable))')).Trim()
+    $path = (readNative $py @('-c', "import sys; print(getattr(sys, '_base_executable', sys.executable))")).Trim()
     # Standalone uv install: upgrade the patch release on the same branch; do not install a second copy.
     if (findTool uv) {
         $uvDir = query uv @('python', 'dir')
@@ -306,7 +306,7 @@ function checkPythonRuntime {
     foreach ($py in $script:python_list) {
         # The same interpreter may have several entry points (PATH alias, venv); check it only once by base executable.
         $real = $py
-        $probe = query $py @('-c', 'import os,sys; print(os.path.realpath(getattr(sys, "_base_executable", sys.executable)))')
+        $probe = query $py @('-c', "import os,sys; print(os.path.realpath(getattr(sys, '_base_executable', sys.executable)))")
         if ($probe.Code -eq 0 -and $probe.Text.Trim()) { $real = $probe.Text.Trim() }
         if ($seen.ContainsKey($real)) { continue }
         $seen[$real] = $true
@@ -326,10 +326,10 @@ function getUv { return versionOf (readNative uv @('--version')) }
 function upgradeUv {
     $path = findTool uv
     foreach ($py in $script:python_list) {
-        $dir = query $py @('-c', 'import sysconfig; print(sysconfig.get_path("scripts"))')
+        $dir = query $py @('-c', "import sysconfig; print(sysconfig.get_path('scripts'))")
         if ($dir.Code -eq 0 -and $path -eq (Join-Path $dir.Text 'uv.exe')) {
             $probe = query $py @('-c', 'import uv')
-            if ($probe.Code -eq 0) { upgradePythonPackage $py uv '0.13.4'; return }
+            if ($probe.Code -eq 0) { upgradePythonPackage $py uv '0.13.5'; return }
         }
     }
     $self = updateQuery uv @('self', 'update')
@@ -337,7 +337,7 @@ function upgradeUv {
     try { upgradeOwned uv 'astral-sh.uv' uv uv }
     catch { throw "Both the self-update and the original-manager update failed: $($_.Exception.Message)" }
 }
-function checkUv { if (findTool uv) { ensureVersion uv '0.13.4' { getUv } { upgradeUv } } }
+function checkUv { if (findTool uv) { ensureVersion uv '0.13.5' { getUv } { upgradeUv } } }
 function getRustup { return versionOf (readNative rustup @('--version')) }
 function upgradeRustup {
     $self = updateQuery rustup @('self', 'update')
@@ -483,6 +483,84 @@ function checkCastore {
         ensureVersion castore '1.0.22' { getCastore } { upgradeCastore }
     }
 }
+
+# Ruby excon ships its own certificate bundle; update through Bundler when a Gemfile.lock exists, and check the global gem separately.
+function getExcon([string]$scope = 'local') {
+    if ($scope -eq 'global') {
+        $result = query gem @('list', '-e', 'excon')
+        if ($result.Code -eq 0 -and $result.Text -match '(?m)^excon \(([0-9][^,)]*)') { return $Matches[1] }
+        return ''
+    }
+    if (-not (Test-Path -LiteralPath 'Gemfile.lock')) { return '' }
+    $raw = Get-Content -LiteralPath 'Gemfile.lock' -Raw -Encoding UTF8
+    if ($raw -match '(?m)^\s+excon \(([0-9][^)]*)\)') { return $Matches[1] }
+    return ''
+}
+function upgradeExcon([string]$scope = 'local') {
+    if ($scope -eq 'global') { runNative gem @('update', 'excon') }
+    else { runNative bundle @('update', 'excon') }
+}
+function checkExcon {
+    if ((Test-Path -LiteralPath 'Gemfile.lock') -and (Select-String -LiteralPath 'Gemfile.lock' -Pattern '^\s+excon \(' -Quiet)) {
+        if (-not (findTool bundle)) { fail 'Ruby excon' 'The lockfile contains excon, but bundle was not found.' }
+        else { ensureVersion 'Ruby excon' '1.8.0' { getExcon local } { upgradeExcon local } }
+    }
+    if (findTool gem) {
+        $current = getExcon global
+        if ($current) { ensureVersion 'Ruby excon (global)' '1.8.0' { getExcon global } { upgradeExcon global } }
+    }
+}
+
+# The trust-manager default CA bundle is an image tag; this only reads the current project's Helm values/manifests and does not modify the cluster.
+function trustPkgTags {
+    $results = New-Object 'System.Collections.Generic.List[string]'
+    $files = Get-ChildItem -LiteralPath $script:project_dir -Recurse -Depth 4 -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Extension -in @('.yaml', '.yml', '.json') -and $_.FullName -notmatch '[\\/](\.git|node_modules|vendor)[\\/]' }
+    foreach ($file in $files) {
+        $flavor = ''
+        foreach ($line in (Get-Content -LiteralPath $file.FullName -Encoding UTF8 -ErrorAction SilentlyContinue)) {
+            if ($line -match 'trust-pkg-debian-trixie') { $flavor = 'trust-pkg-debian-trixie' }
+            elseif ($line -match 'trust-pkg-debian-bookworm') { $flavor = 'trust-pkg-debian-bookworm' }
+            if ($line -match '(trust-pkg-debian-(?:trixie|bookworm):[0-9A-Za-z._-]+)') { $results.Add($Matches[1]); continue }
+            if ($flavor -and ($line -match 'tag:\s*"?([0-9][0-9A-Za-z._-]*)')) { $results.Add(($flavor + ':' + $Matches[1])) }
+        }
+    }
+    return @($results | Sort-Object -Unique)
+}
+function trustPkgGe([string]$current, [string]$minimum) {
+    # A tag looks like 20250419-deb13u1.0; compare segment by segment: date, deb major version, u revision, and .N patch.
+    $pattern = '^(\d+)-deb(\d+)u(\d+)(?:\.(\d+))?$'
+    if ($current -notmatch $pattern) { return $false }
+    $cdate = [long]$Matches[1]; $cmajor = [long]$Matches[2]; $crev = [long]$Matches[3]
+    $cpatch = if ($Matches[4]) { [long]$Matches[4] } else { 0 }
+    if ($minimum -notmatch $pattern) { return $false }
+    $mdate = [long]$Matches[1]; $mmajor = [long]$Matches[2]; $mrev = [long]$Matches[3]
+    $mpatch = if ($Matches[4]) { [long]$Matches[4] } else { 0 }
+    if ($cdate -ne $mdate) { return ($cdate -gt $mdate) }
+    if ($cmajor -ne $mmajor) { return ($cmajor -gt $mmajor) }
+    if ($crev -ne $mrev) { return ($crev -gt $mrev) }
+    return ($cpatch -ge $mpatch)
+}
+function checkCertManagerTrust {
+    $tags = @(trustPkgTags)
+    if ($tags.Count -eq 0) { reportSkip 'Kubernetes cert-manager trust bundle' 'No reference to the trust-manager default CA bundle was found in the current directory; verify the cluster side manually.'; return }
+    $seen = @{}
+    foreach ($tag in $tags) {
+        if ($seen.ContainsKey($tag)) { continue }
+        $seen[$tag] = $true
+        $split = $tag.IndexOf(':')
+        if ($split -lt 1) { continue }
+        $flavor = $tag.Substring(0, $split); $version = $tag.Substring($split + 1)
+        if ($flavor -eq 'trust-pkg-debian-trixie') { $minimum = '20250419-deb13u1.0' }
+        elseif ($flavor -eq 'trust-pkg-debian-bookworm') { $minimum = '20250419-deb12u2.0' }
+        else { continue }
+        if (trustPkgGe $version $minimum) {
+            reportSkip 'Kubernetes cert-manager trust bundle' "Reference [$tag] already satisfies [$minimum]."
+        } else {
+            fail 'Kubernetes cert-manager trust bundle' "Reference [$tag] is below [${flavor}:$minimum]; upgrade it through defaultPackageImage.tag in the Helm values; the script does not modify the cluster."
+        }
+    }
+}
 function getPerlCa { return readNative perl @('-MMozilla::CA', '-e', 'print $Mozilla::CA::VERSION') }
 function upgradePerlCa {
     if (findTool cpanm) { runNative cpanm @('Mozilla::CA~>=20261020') }
@@ -600,8 +678,49 @@ function checkFreebsd { }
 function checkFreedesktop { }
 function checkOmnios { }
 function checkOpenbsd { }
+function checkNetbsd { }
+function checkOracleLinux { }
+function checkRhel { }
 function checkBottlerocket { reportSkip Bottlerocket 'Still pending in the patch table; no fixed version is configured yet.' }
-function checkErlangCertifi { reportSkip 'Erlang certifi' 'Still pending in the patch table; no fixed version is configured yet.' }
+function checkGodot { reportSkip Godot 'Still pending in the patch table; no fixed version is configured yet.' }
+function checkLibreOffice { reportSkip LibreOffice 'Still pending in the patch table; no fixed version is configured yet.' }
+
+# Erlang certifi is a Hex package; only the rebar/mix dependencies of the current directory are handled, Python certifi is untouched.
+function erlangCertifiPresent {
+    $hasMix = (Test-Path -LiteralPath 'mix.lock') -and (Select-String -LiteralPath 'mix.lock' -Pattern '"certifi"' -Quiet)
+    $hasRebarLock = (Test-Path -LiteralPath 'rebar.lock') -and (Select-String -LiteralPath 'rebar.lock' -Pattern 'certifi' -Quiet)
+    $hasRebarConfig = (Test-Path -LiteralPath 'rebar.config') -and (Select-String -LiteralPath 'rebar.config' -Pattern '\{certifi,' -Quiet)
+    return ($hasMix -or $hasRebarLock -or $hasRebarConfig)
+}
+function getErlangCertifi {
+    $version = ''
+    if (Test-Path -LiteralPath 'mix.lock') {
+        $raw = Get-Content -LiteralPath 'mix.lock' -Raw -Encoding UTF8
+        if ($raw -match '"certifi"\s*:\s*\{:hex,\s*:certifi,\s*"([^"]+)"') { $version = $Matches[1] }
+    }
+    if (-not $version -and (Test-Path -LiteralPath 'rebar.lock')) {
+        $raw = Get-Content -LiteralPath 'rebar.lock' -Raw -Encoding UTF8
+        if ($raw -match '\{<<"certifi">>,\{pkg,<<"certifi">>,<<"([^"]+)">>\}') { $version = $Matches[1] }
+    }
+    if (-not $version -and (Test-Path -LiteralPath 'rebar.config')) {
+        $raw = Get-Content -LiteralPath 'rebar.config' -Raw -Encoding UTF8
+        if ($raw -match '\{certifi,\s*"([^"]+)"') { $version = $Matches[1] }
+    }
+    if (-not $version) { throw 'Could not parse the certifi version from the lockfile.' }
+    return $version
+}
+function upgradeErlangCertifi {
+    if ((Test-Path -LiteralPath 'mix.lock') -and (Select-String -LiteralPath 'mix.lock' -Pattern '"certifi"' -Quiet)) {
+        runNative mix @('deps.update', 'certifi'); return
+    }
+    if (findTool rebar3) { runNative rebar3 @('upgrade', 'certifi'); return }
+    throw 'The current directory has a certifi dependency, but rebar3 was not found.'
+}
+function checkErlangCertifi {
+    if (-not (erlangCertifiPresent)) { return }
+    try { $null = getErlangCertifi } catch { fail 'Erlang certifi' $_.Exception.Message; return }
+    ensureVersion 'Erlang certifi' '2.18.0' { getErlangCertifi } { upgradeErlangCertifi }
+}
 
 # Java uses the full runtime.version; 8u511 is normalized to 8.0.511, and the build number after + does not participate in patch comparison.
 function normalizeJava([string]$version) {
@@ -682,6 +801,37 @@ function upgradeBun {
 }
 function checkBun { if (findTool bun) { ensureVersion Bun '1.4.4' { getBun } { upgradeBun } } }
 
+# Dart / Flutter: when Flutter ships its own Dart, only the Flutter SDK is checked so the bundled Dart is not treated as a separate installation.
+function getFlutter {
+    $result = query flutter @('--version')
+    if ($result.Code -ne 0) { throw "[flutter]: $($result.Text)" }
+    if ($result.Text -match '(?m)^Flutter ([0-9]+\.[0-9]+\.[0-9]+)') { return $Matches[1] }
+    throw 'Could not parse the Flutter SDK version from flutter --version.'
+}
+function getDart {
+    $result = query dart @('--version')
+    if ($result.Code -ne 0) { throw "[dart]: $($result.Text)" }
+    return versionOf $result.Text
+}
+function dartBundledByFlutter {
+    $dart = findTool dart
+    $flutter = findTool flutter
+    if (-not $dart -or -not $flutter) { return $false }
+    return ((Split-Path $dart) -eq (Split-Path $flutter))
+}
+function upgradeFlutter { runNative flutter @('upgrade') }
+function upgradeDart {
+    if ((findTool flutter) -and (dartBundledByFlutter)) { runNative flutter @('upgrade'); return }
+    upgradeOwned dart 'Google.DartSDK' dart-sdk dart-sdk
+}
+function checkDartFlutter {
+    if (findTool flutter) { ensureVersion Flutter '3.47.8' { getFlutter } { upgradeFlutter } }
+    if (findTool dart) {
+        if ((findTool flutter) -and (dartBundledByFlutter)) { reportSkip Dart 'Provided by the Flutter SDK; checked/upgraded with Flutter.' }
+        else { ensureVersion Dart '3.13.7' { getDart } { upgradeDart } }
+    }
+}
+
 function getConda { return versionOf (readNative conda @('--version')) }
 function upgradeConda {
     # Official update command; keep the user's existing channel configuration and do not add a default channel.
@@ -689,7 +839,90 @@ function upgradeConda {
 }
 function checkConda { if (findTool conda) { ensureVersion Conda '26.9.4' { getConda } { upgradeConda } } }
 
-# ArgoCD CLI and in-cluster server versions are handled separately: only the local CLI is changed safely; the server is only reported.
+# Obsidian is an Electron app: the application itself must be updated; updating system certificates is not a substitute.
+function getObsidian {
+    $candidates = @()
+    if ($env:LOCALAPPDATA) {
+        $candidates += Join-Path $env:LOCALAPPDATA 'Obsidian\Obsidian.exe'
+        $candidates += Join-Path $env:LOCALAPPDATA 'Programs\Obsidian\Obsidian.exe'
+    }
+    if ($env:ProgramFiles) { $candidates += Join-Path $env:ProgramFiles 'Obsidian\Obsidian.exe' }
+    foreach ($path in $candidates) {
+        if ($path -and (Test-Path -LiteralPath $path)) { return (versionOf (Get-Item -LiteralPath $path).VersionInfo.ProductVersion) }
+    }
+    throw 'No Obsidian installation record was found.'
+}
+function upgradeObsidian {
+    if (findTool winget) {
+        $listed = query winget @('list', '--id', 'Obsidian.Obsidian', '--exact', '--disable-interactivity')
+        if ($listed.Code -eq 0 -and $listed.Text.Contains('Obsidian.Obsidian')) {
+            runNative winget @('upgrade', '--id', 'Obsidian.Obsidian', '--exact', '--disable-interactivity'); return
+        }
+    }
+    throw 'Cannot update Obsidian automatically; use the in-app update or the official installer, and restart the app after upgrading.'
+}
+function checkObsidian {
+    try { $null = getObsidian } catch { return }
+    ensureVersion Obsidian '1.14.5' { getObsidian } { upgradeObsidian }
+}
+
+# VS Code is also an Electron app; Insiders and stable are not mixed, only stable is compared here.
+function getVSCode {
+    $result = query code @('--version')
+    if ($result.Code -ne 0) { throw "[code]: $($result.Text)" }
+    $first = ($result.Text -split '\r?\n')[0]
+    if ($first) { return $first.Trim() }
+    throw 'code --version returned no version.'
+}
+function upgradeVSCode { upgradeOwned code 'Microsoft.VisualStudioCode' vscode vscode }
+function checkVSCode {
+    if (findTool code) { ensureVersion 'Visual Studio Code' '1.143.1' { getVSCode } { upgradeVSCode } }
+}
+
+function getGitHubCli { return versionOf (readNative gh @('--version')) }
+function upgradeGitHubCli { upgradeOwned gh 'GitHub.cli' gh gh }
+function checkGitHubCli {
+    if (findTool gh) { ensureVersion 'GitHub CLI' '2.102.1' { getGitHubCli } { upgradeGitHubCli } }
+}
+
+# mitmproxy may be installed by pipx / uv tool / pip, etc.; return to the original install entry point first.
+function getMitmproxy {
+    if (findTool mitmproxy) { return versionOf (readNative mitmproxy @('--version')) }
+    if (findTool mitmdump) { return versionOf (readNative mitmdump @('--version')) }
+    throw 'mitmproxy/mitmdump was not found.'
+}
+function upgradeMitmproxy {
+    if (findTool pipx) {
+        $pipx = query pipx @('list', '--short')
+        if ($pipx.Text -match '(?m)^mitmproxy\s') { runNative pipx @('upgrade', 'mitmproxy'); return }
+    }
+    if (findTool uv) {
+        $uvTools = query uv @('tool', 'list')
+        if ($uvTools.Text -match '(?m)^mitmproxy\s') { runNative uv @('tool', 'upgrade', 'mitmproxy'); return }
+    }
+    foreach ($py in $script:python_list) {
+        $probe = query $py @('-c', "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('mitmproxy') else 1)")
+        if ($probe.Code -eq 0) { upgradePythonPackage $py mitmproxy '12.3'; return }
+    }
+    throw 'Could not determine how mitmproxy was installed; upgrade it with pipx / uv tool / pip / your package manager.'
+}
+function checkMitmproxy {
+    if (-not (findTool mitmproxy) -and -not (findTool mitmdump)) { return }
+    ensureVersion mitmproxy '12.3' { getMitmproxy } { upgradeMitmproxy }
+}
+
+# ArgoCD CLI and in-cluster server versions are separate; the page lists versions on the three stable release lines 3.3 / 3.4 / 3.5.
+function argocdTarget([string]$version) {
+    $dot = $version.LastIndexOf('.')
+    if ($dot -lt 1) { throw "Branch [$version] has no listed stable fixed version (3.6 currently only has RCs; pre-releases are not accepted as proof of a fix)." }
+    $branch = $version.Substring(0, $dot)
+    switch ($branch) {
+        '3.3' { return '3.3.18' }
+        '3.4' { return '3.4.12' }
+        '3.5' { return '3.5.6' }
+        default { throw "Branch [$version] has no listed stable fixed version (3.6 currently only has RCs; pre-releases are not accepted as proof of a fix)." }
+    }
+}
 function getArgocd { return versionOf (readNative argocd @('version', '--client', '--short')) }
 function upgradeArgocd { upgradeOwned argocd 'Argoproj.ArgoCD' argocd argocd }
 function checkArgocdServer {
@@ -700,14 +933,22 @@ function checkArgocdServer {
     }
     $image = $result.Text.Trim()
     if ($image -match ':v?(\d+\.\d+\.\d+)$') {
-        if (versionGe $Matches[1] '3.3.18') { reportSkip 'ArgoCD server' "Image [$image] already satisfies the requirement." }
-        else { fail 'ArgoCD server' "Image [$image] is below 3.3.18; upgrade it through Helm/deployment manifests, the script does not modify the cluster automatically." }
+        $server = $Matches[1]
+        try { $minimum = argocdTarget $server } catch { fail 'ArgoCD server' "The release line of image [$image] has no stable fixed version (3.6 currently only has RCs); manual confirmation is required."; return }
+        if (versionGe $server $minimum) { reportSkip 'ArgoCD server' "Image [$image] already satisfies [$minimum]." }
+        else { fail 'ArgoCD server' "Image [$image] is below [$minimum]; upgrade it through Helm/deployment manifests, the script does not modify the cluster automatically." }
     } else {
         reportSkip 'ArgoCD server' "Image [$image] does not use a comparable version tag; confirm manually."
     }
 }
 function checkArgocd {
-    if (findTool argocd) { ensureVersion 'ArgoCD CLI' '3.3.18' { getArgocd } { upgradeArgocd } }
+    if (findTool argocd) {
+        try {
+            $current = getArgocd
+            $minimum = argocdTarget $current
+            ensureVersion 'ArgoCD CLI' $minimum { getArgocd } { upgradeArgocd }
+        } catch { fail 'ArgoCD CLI' $_.Exception.Message }
+    }
     if (findTool kubectl) { checkArgocdServer }
 }
 
@@ -741,6 +982,55 @@ function checkDockerDesktop {
     ensureVersion 'Docker Desktop' '4.96.2' { getDockerDesktop } { upgradeDockerDesktop }
 }
 
+# Docker Engine / CLI is handled separately from Desktop; Desktop-managed installations are upgraded with Desktop and not processed twice.
+function getDockerEngine {
+    $result = query docker @('version', '--format', '{{.Server.Version}}')
+    if ($result.Code -ne 0 -or [string]::IsNullOrWhiteSpace($result.Text)) { return '' }
+    try { return (versionOf $result.Text) } catch { return '' }
+}
+function getDockerCli { return versionOf (readNative docker @('--version')) }
+function upgradeDockerEngine {
+    throw 'No Docker Engine that can be upgraded automatically was found; on Windows the Engine is managed by Docker Desktop or WSL.'
+}
+function upgradeDockerCli { upgradeOwned docker 'Docker.DockerCLI' docker docker-cli }
+function checkDockerEngine {
+    if (-not (findTool docker)) { return }
+    try { $null = getDockerDesktop; reportSkip 'Docker Engine' 'Managed by Docker Desktop; upgraded with Desktop.'; return } catch { }
+    $current = getDockerEngine
+    if (-not $current) { fail 'Docker Engine' 'Cannot connect to the Docker daemon, so the Engine version cannot be verified.'; return }
+    ensureVersion 'Docker Engine' '29.9.2' { getDockerEngine } { upgradeDockerEngine }
+}
+function checkDockerCli {
+    if (-not (findTool docker)) { return }
+    try { $null = getDockerDesktop; reportSkip 'Docker CLI' 'Managed by Docker Desktop; upgraded with Desktop.'; return } catch { }
+    ensureVersion 'Docker CLI' '29.9.2' { getDockerCli } { upgradeDockerCli }
+}
+
+# The Git for Windows version string is X.Y.Z.windows.N; it cannot be handled like a plain dot-separated version that takes only the first three segments.
+function getGitForWindows {
+    $result = query git @('--version')
+    if ($result.Code -ne 0) { throw "[git]: $($result.Text)" }
+    if ($result.Text -match '([0-9]+\.[0-9]+\.[0-9]+)\.windows\.([0-9]+)') { return "$($Matches[1]).$($Matches[2])" }
+    return ''
+}
+function upgradeGitForWindows {
+    if (findTool winget) {
+        $listed = query winget @('list', '--id', 'Git.Git', '--exact', '--disable-interactivity')
+        if ($listed.Code -eq 0 -and $listed.Text.Contains('Git.Git')) {
+            runNative winget @('upgrade', '--id', 'Git.Git', '--exact', '--disable-interactivity'); return
+        }
+    }
+    if (findTool choco) { runNative choco @('upgrade', 'git', '-y'); return }
+    if (findTool scoop) { runNative scoop @('update', 'git'); return }
+    throw 'winget/choco/scoop was not found; upgrade with the original Git for Windows installer.'
+}
+function checkGitForWindows {
+    if (-not (findTool git)) { return }
+    try { $current = getGitForWindows } catch { fail 'Git for Windows' $_.Exception.Message; return }
+    if (-not $current) { reportSkip 'Git for Windows' 'The current git has no windows version suffix, so it is not Git for Windows.'; return }
+    ensureVersion 'Git for Windows' '2.56.0.3' { getGitForWindows } { upgradeGitForWindows }
+}
+
 # Every handler without a detection result has a specific reason; --check no longer skips silently.
 $script:skip_reasons = @{
     checkUbuntu = @('Ubuntu CA package', 'Does not apply on native Windows; run the Bash version separately inside WSL.')
@@ -751,15 +1041,26 @@ $script:skip_reasons = @{
     checkFreedesktop = @('Freedesktop SDK', 'Does not apply on native Windows; inside Linux/WSL use the Bash version to check Flatpak runtimes.')
     checkOmnios = @('OmniOS web/ca-bundle', 'Does not apply on native Windows.')
     checkOpenbsd = @('OpenBSD cert.pem', 'Does not apply on native Windows; run the Bash version on OpenBSD.')
+    checkNetbsd = @('NetBSD ca-certificates', 'Does not apply on native Windows; run the Bash version on NetBSD.')
+    checkOracleLinux = @('Oracle Linux CA package', 'Does not apply on native Windows.')
+    checkRhel = @('RHEL CA package', 'Does not apply on native Windows.')
     checkJava = @('Java', 'java was not found on PATH.')
     checkPixi = @('pixi', 'pixi was not found on PATH.')
     checkClaude = @('Claude Code', 'claude was not found on PATH.')
     checkMise = @('mise', 'mise was not found on PATH.')
     checkDeno = @('Deno', 'deno was not found on PATH.')
+    checkObsidian = @('Obsidian', 'No recognizable Obsidian installation was found.')
+    checkVSCode = @('Visual Studio Code', 'code was not found on PATH.')
+    checkGitHubCli = @('GitHub CLI', 'gh was not found on PATH.')
+    checkMitmproxy = @('mitmproxy', 'mitmproxy/mitmdump was not found on PATH.')
     checkBun = @('Bun', 'bun was not found on PATH.')
+    checkDartFlutter = @('Dart / Flutter', 'dart or flutter was not found on PATH.')
     checkConda = @('Conda', 'conda was not found on PATH.')
     checkArgocd = @('ArgoCD CLI', 'argocd was not found on PATH.')
     checkDockerDesktop = @('Docker Desktop', 'No Docker Desktop installation record was found.')
+    checkDockerEngine = @('Docker Engine', 'docker was not found on PATH, or no verifiable Engine can be connected.')
+    checkDockerCli = @('Docker CLI', 'docker was not found on PATH.')
+    checkGitForWindows = @('Git for Windows', 'The current git is not Git for Windows, or git was not found.')
     checkPypiAction = @('pypi-publish GitHub Action', 'The workflows of the current project contain no reference to this Action.')
     checkArch = @('Arch CA package', 'Does not apply on native Windows.')
     checkGentoo = @('Gentoo CA package', 'Does not apply on native Windows.')
@@ -784,12 +1085,15 @@ $script:skip_reasons = @{
     checkElectron = @('Electron', 'No recognizable installation record was found in the current directory or the queryable npm global directory.')
     checkComposer = @('Composer ca-bundle', 'No recognizable installation record was found in the current project or the queryable Composer global installation.')
     checkCastore = @('Elixir castore', 'The current directory has no mix.lock containing castore.')
+    checkExcon = @('Ruby excon', 'The current project has no recognizable excon dependency and no global gem was found.')
+    checkCertManagerTrust = @('Kubernetes cert-manager trust bundle', 'No reference to the trust-manager default CA bundle was found in the current directory.')
+    checkErlangCertifi = @('Erlang certifi', 'The current directory has no recognizable rebar/mix certifi dependency.')
     checkPerlCa = @('Perl Mozilla::CA', 'Perl was not found, or the active Perl cannot import Mozilla::CA.')
 }
 
 # Main flow: run each item in turn; a failure in one item does not block the items after it.
 # The fixed finalized time represents the table.patched baseline snapshot; the current time at startup is not passed off as the update time.
-$script:finalized_at = '2026-10-23 15:22:30 Australia/Sydney (UTC+11:00)'
+$script:finalized_at = '2026-10-25 19:32:30 Australia/Sydney (UTC+11:00)'
 Write-Host "eMudhra fix script | Finalized at: $script:finalized_at"
 if ($env:EMUDHRA_BADARGS -or $env:EMUDHRA_MODE -notin @('', '--check', '--help', '-h', $null)) {
     [Console]::Error.WriteLine('Unknown argument. Usage: emudhrafix.cmd [--check]')
@@ -819,6 +1123,9 @@ foreach ($handler in @(
     'checkGuix',
     'checkOmnios',
     'checkOpenbsd',
+    'checkNetbsd',
+    'checkOracleLinux',
+    'checkRhel',
     'checkBottlerocket',
     'checkNss',
     'checkCurlBundle',
@@ -838,17 +1145,29 @@ foreach ($handler in @(
     'checkRustup',
     'checkElectron',
     'checkBun',
+    'checkDartFlutter',
     'checkClaude',
     'checkArgocd',
     'checkDockerDesktop',
+    'checkDockerEngine',
+    'checkDockerCli',
+    'checkGitForWindows',
     'checkComposer',
     'checkCastore',
+    'checkExcon',
+    'checkCertManagerTrust',
     'checkErlangCertifi',
     'checkMise',
     'checkPypiAction',
     'checkPerlCa',
     'checkDeno',
-    'checkConda'
+    'checkConda',
+    'checkObsidian',
+    'checkVSCode',
+    'checkGodot',
+    'checkGitHubCli',
+    'checkLibreOffice',
+    'checkMitmproxy'
 )) { invokeCheck $handler }
 Write-Host "Done: $script:updated upgraded; $script:pending pending; $script:skipped skipped; $script:errors errors/unverified."
 if ($script:errors -gt 0 -or $script:pending -gt 0) { exit 1 }
