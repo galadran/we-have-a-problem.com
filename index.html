@@ -298,6 +298,8 @@ curl https://dv-g3b-aaa-noct-emudhra.we-have-a-problem.com/</pre>
 
 <p>macOS blocks the compromised intermediates in apps that use Apple's networking and security frameworks. However, the built-in command line tools verify certificates against <code translate="no">/etc/ssl/cert.pem</code> without checking revocation. Apple has <a href="https://support.apple.com/en-us/149555">stated</a> it will update that file in a future macOS update. Until then, you can remove the affected roots yourself.</p>
 
+<p><em>Note</em>: the most recent OS update from Apple for macOS 26.7.2 and 27.2 will undo those changes and put back the roots you just removed.  You will need to re-apply the same changes after the OS update.  (A future OS update may or may not remove or re-add these certificates.)</p>
+
 <p>Back up the file:</p>
 <pre translate="no">[ -e /etc/ssl/cert.pem.orig ] || sudo cp -p /etc/ssl/cert.pem /etc/ssl/cert.pem.orig</pre>
 
