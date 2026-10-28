@@ -395,6 +395,8 @@ update-ca-trust</pre>
 <p>The script imports its 16 compromised intermediates and cross-signs into <code translate="no">LocalMachine\Disallowed</code> (Untrusted Certificates).</p>
 
 <p>This mitigation applies to clients using the Windows operating system certificate trust stores and chain validation (including Schannel TLS and Authenticode). It adds blocks to Untrusted Certificates without modifying Trusted Root Certification Authorities. Applications using independent CA bundles still need their own updates.</p>
+
+<p>For older versions of Windows that do not have PowerShell 5.1 or later (eg Windows 8.1) you can import the certificates manually. Download <a href="https://github.com/galadran/we-have-a-problem.com/raw/refs/heads/main/eMudhra_compromised_certs.zip">eMudhra_compromised_certs.zip</a> and follow the instructions in <a href="https://github.com/galadran/we-have-a-problem.com/raw/refs/heads/main/windows_legacy_instructions.txt">windows_legacy_instructions.txt</a> to add the 16 certs to the untrusted store.</p>
 </details>
 
 <details class="workaround" id="android">
