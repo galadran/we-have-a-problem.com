@@ -228,12 +228,14 @@ curl https://dv-g3b-aaa-noct-emudhra.we-have-a-problem.com/</pre>
   <tbody>
     <tr><td>Cloudflare CFSSL trust store</td><td><a href="https://github.com/cloudflare/cfssl_trust/releases/tag/trust-store-2026.10.1">2026.10.1</a></td></tr>
     <tr><td>Composer ca-bundle</td><td><a href="https://github.com/composer/ca-bundle/releases/tag/1.6.0">1.4.16, 1.6.0</a></td></tr>
+    <tr><td>conda-forge and Anaconda ca-certificates (conda, Mamba)</td><td><a href="https://conda.org/blog/2026-10-21-emudhra-security-updates#conda-2694">2026.10.19 (conda-forge),<br>2026.10.20 (Anaconda main)</a></td></tr>
     <tr><td>curl CA bundle</td><td><a href="https://curl.se/docs/caextract.html">2026-10-20</a></td></tr>
     <tr><td>Elixir castore</td><td><a href="https://hex.pm/packages/castore/1.0.22">1.0.22</a></td></tr>
     <tr><td>Erlang certifi</td><td><a href="https://certifi.hexdocs.pm/2.18.0/changelog.html#2-18-0-2026-10-23">2.18.0</a></td></tr>
     <tr><td>Kubernetes cert-manager</td><td><a href="https://cert-manager.io/docs/trust/trust-manager/#emudhra-compromise">trust-pkg-debian-trixie:20250419-deb13u1.0,<br>trust-pkg-debian-bookworm:20250419-deb12u2.0</a></td></tr>
     <tr><td>NSS</td><td><a href="https://groups.google.com/a/mozilla.org/g/dev-tech-crypto/c/vSxZxnOMMvs">3.131.1</a></td></tr>
     <tr><td>Perl Mozilla::CA</td><td><a href="https://metacpan.org/release/LWP/Mozilla-CA-20261020">20261020</a></td></tr>
+    <tr><td>Python botocore and boto3</td><td><a href="https://github.com/boto/botocore/pull/3838">1.43.117</a></td></tr>
     <tr><td>Python certifi</td><td><a href="https://github.com/certifi/python-certifi/releases/tag/2026.10.19">2026.10.19</a></td></tr>
     <tr><td>Ruby excon</td><td><a href="https://github.com/excon/excon/blob/v1.8.0/changelog.txt#L15">1.8.0</a></td></tr>
     <tr><td>Rust rustls-webpki</td><td><a href="https://github.com/rustls/webpki/releases/tag/v%2F0.103.16">0.103.16</a></td></tr>
@@ -255,7 +257,7 @@ curl https://dv-g3b-aaa-noct-emudhra.we-have-a-problem.com/</pre>
     <tr><td>Go</td><td><a href="https://groups.google.com/g/golang-announce/c/66pojueaQek">1.27.3,<br>1.26.10</a></td></tr>
     <tr><td>Java</td><td><a href="https://openjdk.org/emudhra" class="pending">Pending for OpenJDK</a>,<br><a href="https://ops.java/emudhra">Oracle JDK 27.0.1.0.3,<br>25.0.5.0.3,<br>21.0.13.0.3,<br>17.0.21.0.3,<br>11.0.33.0.3,<br>8u511 b33</a>,<br><a href="https://github.com/JetBrains/JetBrainsRuntime/releases">JetBrains Runtime 25.0.4.1b635.79,<br>25.0.4.1b508.41,<br>25.0.4.1b329.142,<br>21.0.11b1163.125,<br>21.0.9b1038.91</a></td></tr>
     <tr><td>Node.js</td><td><a href="https://github.com/nodejs/node/releases/tag/v26.12.1">26.12.1</a>,<br><a href="https://github.com/nodejs/node/releases/tag/v24.22.1">24.22.1</a>,<br><a href="https://github.com/nodejs/node/releases/tag/v22.23.4">22.23.4</a></td></tr>
-    <tr><td>Python</td><td><a href="https://blog.python.org/2026/10/python-3152-31410-31318-31216-31118/">3.15.2,<br>3.14.10,<br>3.13.18,<br>3.12.16,<br>3.11.18</a></td></tr>
+    <tr><td>Python</td><td><a href="https://blog.python.org/2026/10/python-3152-31410-31318-31216-31118/">3.15.2,<br>3.14.10,<br>3.13.18,<br>3.12.16,<br>3.11.18</a>,<br><a href="https://discuss.python.org/t/information-for-python-users-regarding-emudhra-emsign-ca-certificate-security-incident/109576">guidance for Python users</a></td></tr>
   </tbody>
 </table>
 </details>
@@ -267,36 +269,52 @@ curl https://dv-g3b-aaa-noct-emudhra.we-have-a-problem.com/</pre>
   <thead><tr><th>Software</th><th>Patched version</th></tr></thead>
   <tbody>
     <tr><td>ArgoCD</td><td><a href="https://github.com/argoproj/argo-cd/releases/tag/v3.3.18">3.3.18</a>, <a href="https://github.com/argoproj/argo-cd/releases/tag/v3.4.12">3.4.12</a>, <a href="https://github.com/argoproj/argo-cd/releases/tag/v3.5.6">3.5.6</a>, <a href="https://github.com/argoproj/argo-cd/releases/tag/v3.6.0-rc4">3.6.0-rc4</a></td></tr>
+    <tr><td>AWS CLI</td><td><a href="https://github.com/aws/aws-cli/pull/10786">2.38.4</a></td></tr>
     <tr><td>Bazel</td><td><a href="https://github.com/bazelbuild/bazel/releases/tag/7.7.2">7.7.2</a>, <a href="https://github.com/bazelbuild/bazel/releases/tag/8.8.2">8.8.2</a>, <a href="https://github.com/bazelbuild/bazel/releases/tag/9.3.1">9.3.1</a>, <a href="https://github.com/bazelbuild/bazel/releases/tag/10.0.0rc2">10.0.0rc2</a></td></tr>
+    <tr><td>BeeWare Python-Apple-support</td><td><a href="https://github.com/beeware/Python-Apple-support/releases">3.15-b3,<br>3.14-b14,<br>3.13-b18,<br>3.12-b13,<br>3.11-b13</a></td></tr>
+    <tr><td>build-and-inspect-python-package GitHub Action</td><td><a href="https://github.com/hynek/build-and-inspect-python-package/releases/tag/v3.0.2">3.0.2</a></td></tr>
     <tr><td>certbot</td><td><a href="https://github.com/certbot/certbot/pull/10812" class="pending">pending</a></td></tr>
+    <tr><td>cibuildwheel</td><td><a href="https://github.com/pypa/cibuildwheel/security/advisories/GHSA-wf8c-vgg9-wv9j">4.3.5</a></td></tr>
     <tr><td>Claude Code</td><td><a href="https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md#21303">2.1.303</a></td></tr>
     <tr><td>Conda</td><td><a href="https://docs.conda.io/projects/conda/en/latest/release-notes.html#version-26.9.4">26.9.4</a></td></tr>
     <tr><td>containerd</td><td><a href="https://github.com/containerd/containerd/pull/14439" class="pending">pending</a></td></tr>
     <tr><td>Docker cli</td><td><a href="https://github.com/docker/cli/releases/tag/v29.9.2">29.9.2</a></td></tr>
     <tr><td>Docker Desktop</td><td><a href="https://docs.docker.com/desktop/release-notes/#4962">4.96.2</a></td></tr>
     <tr><td>Docker Engine</td><td><a href="https://docs.docker.com/engine/release-notes/29/#2992">29.9.2</a></td></tr>
+    <tr><td>Docker official Python images</td><td><a href="https://github.com/docker-library/python/issues/1142">3.15.2,<br>3.14.10,<br>3.13.18,<br>3.12.16,<br>3.11.18</a></td></tr>
     <tr><td>Git for Windows</td><td><a href="https://github.com/git-for-windows/git/releases/tag/v2.56.0.windows.3">2.56.0.3</a></td></tr>
     <tr><td>GitLab</td><td><a href="https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-5-3-released/">19.5.3, 19.4.5, 19.3.7, 19.2.10, 19.1.10, 19.0.11, 18.11.14</a></td></tr>
     <tr><td>GitLab runner</td><td><a href="https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-5-3-released/">19.5.1</a></td></tr>
     <tr><td>GitHub CLI</td><td><a href="https://github.com/cli/cli/releases/tag/v2.102.1">2.102.1</a></td></tr>
     <tr><td>Godot</td><td><a href="https://github.com/godotengine/godot/pull/124724" class="pending">pending</a></td></tr>
+    <tr><td>Google Cloud CLI</td><td><a href="https://cloud.google.com/sdk/docs/release-notes#59001_2026-10-22">590.0.1</a></td></tr>
     <tr><td>gRPC</td><td><a href="https://github.com/grpc/grpc/releases/tag/v1.84.1">1.84.1</a>, <a href="https://github.com/grpc/grpc/releases/tag/v1.85.0">1.85.0</a></td></tr>
+    <tr><td>Hatch</td><td><a href="https://github.com/pypa/hatch/releases/tag/hatch-v1.18.2">1.18.2</a></td></tr>
     <tr><td>Immich</td><td><a href="https://github.com/immich-app/immich/releases/tag/v3.3.5">3.3.5</a></td></tr>
     <tr><td>JetBrains IDEs</td><td><a href="https://blog.jetbrains.com/security/2026/10/compromised-emudhra-certificates-ides/">2025.3&ndash;2026.3 latest updates</a></td></tr>
     <tr><td>JetBrains Toolbox App</td><td><a href="https://blog.jetbrains.com/security/2026/10/compromised-emudhra-certificates-ides/">3.9.1, 3.8.2</a></td></tr>
     <tr><td>LibreOffice</td><td><a href="https://gerrit.libreoffice.org/c/core/+/212892" class="pending">pending</a></td></tr>
     <tr><td>litellm</td><td><a href="https://github.com/BerriAI/litellm/releases/tag/v1.103.8">1.103.8</a>, <a href="https://github.com/BerriAI/litellm/releases/tag/v1.104.6">1.104.6</a>, <a href="https://github.com/BerriAI/litellm/releases/tag/v1.105.4">1.105.4</a>, <a href="https://github.com/BerriAI/litellm/releases/tag/v1.106.3">1.106.3</a></td></tr>
+    <tr><td>manylinux and musllinux images</td><td><a href="https://github.com/pypa/manylinux/pull/2011">2026.10.26-1</a></td></tr>
     <tr><td>mise</td><td><a href="https://github.com/jdx/mise/releases/tag/v2026.10.17">2026.10.17</a></td></tr>
     <tr><td>mitmproxy</td><td><a href="https://www.mitmproxy.org/posts/releases/mitmproxy-12.3/">12.3</a></td></tr>
     <tr><td>Obsidian</td><td><a href="https://obsidian.md/changelog/2026-10-22-desktop-v1.14.5/">1.14.5</a></td></tr>
+    <tr><td>PDM</td><td><a href="https://github.com/pdm-project/pdm/releases/tag/2.29.4">2.29.4</a></td></tr>
+    <tr><td>Pex</td><td><a href="https://github.com/pex-tool/pex/releases/tag/v2.105.1">2.105.1</a> (vendored pip),<br><a href="https://github.com/pex-tool/pex/releases/tag/v2.105.2">2.105.2</a> (Python 3.14.10)</td></tr>
     <tr><td>pip</td><td><a href="https://github.com/pypa/pip/releases/tag/26.2.2">26.2.2</a></td></tr>
+    <tr><td>pipenv</td><td><a href="https://github.com/pypa/pipenv/releases/tag/v2026.10.2">2026.10.2</a></td></tr>
+    <tr><td>pipx</td><td><a href="https://github.com/pypa/pipx/releases/tag/1.18.7">1.18.7</a></td></tr>
     <tr><td>pixi</td><td><a href="https://github.com/prefix-dev/pixi/releases/tag/v0.82.1">0.82.1</a></td></tr>
     <tr><td>Plex Media Server</td><td><a href="https://forums.plex.tv/t/plex-media-server/30447/720">1.43.5.11079</a></td></tr>
+    <tr><td>prek</td><td><a href="https://github.com/j178/prek/releases/tag/v0.5.7">0.5.7</a></td></tr>
+    <tr><td>pyenv</td><td><a href="https://github.com/pyenv/pyenv/releases/tag/v2.8.14">2.8.14</a></td></tr>
     <tr><td>pypi-publish GitHub Action</td><td><a href="https://github.com/pypa/gh-action-pypi-publish/releases/tag/v1.14.3">1.14.3</a></td></tr>
+    <tr><td>python-build-standalone</td><td><a href="https://github.com/astral-sh/python-build-standalone/releases/tag/20261020">20261020</a> (pip 26.2.2),<br><a href="https://github.com/astral-sh/python-build-standalone/releases/tag/20261026">20261026</a> (Python 3.11.18 to 3.15.2)</td></tr>
     <tr><td>Rustup</td><td><a href="https://blog.rust-lang.org/2026/10/20/Rustup-1.29.2/">1.29.2</a></td></tr>
     <tr><td>sigstore</td><td><a href="https://github.com/sigstore/sigstore-python/releases/tag/v4.5.1">4.5.1</a></td></tr>
     <tr><td>Tailscale</td><td><a href="https://tailscale.com/changelog#2026-10-21">1.104.2</a></td></tr>
-    <tr><td>uv</td><td><a href="https://github.com/astral-sh/uv/releases/tag/0.13.5">0.13.5</a></td></tr>
+    <tr><td>uv</td><td><a href="https://github.com/astral-sh/uv/releases/tag/0.13.5">0.13.5</a>,<br><a href="https://github.com/astral-sh/uv/releases/tag/0.13.6">0.13.6</a> (managed Python 3.11.18 to 3.15.2)</td></tr>
+    <tr><td>virtualenv</td><td><a href="https://github.com/pypa/virtualenv/releases/tag/21.14.12">21.14.12</a></td></tr>
     <tr><td>Visual Studio Code</td><td><a href="https://code.visualstudio.com/updates/v1_143">1.143.1</a></td></tr>
     <tr><td>yt-dlp</td><td><a href="https://github.com/yt-dlp/yt-dlp/releases/tag/2026.10.26">2026.10.26</a>, <br><a href="https://github.com/yt-dlp/yt-dlp/releases/tag/2026.10.21">WARNING: do not use self-updater</a></td></tr>
   </tbody>
