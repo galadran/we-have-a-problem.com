@@ -1,0 +1,55 @@
+If your Windows gets cert updates then the 16 eMudhra compromised intermediate
+certificates should already be distrusted by Windows. If your Windows does not
+get cert updates then there is a PowerShell script, for PowerShell 5.1 or
+later, to install the certificates:
+
+https://github.com/galadran/we-have-a-problem.com/blob/main/Block-EmudhraCompromisedCA.ps1
+
+
+If you have a legacy version of Windows that does not have PowerShell 5.1 or
+later (like Windows 8.1) then you can download the certificates to import them
+manually:
+
+https://github.com/galadran/we-have-a-problem.com/raw/refs/heads/main/eMudhra_compromised_certs.zip
+
+Open a command prompt as administrator and run certutil:
+
+
+pushd [replace with the directory path]
+@echo off
+for /L %i in (1,1,16) do certutil -addstore -f Disallowed %i.pem
+@echo on
+popd
+
+
+It should say each certificate was added successfully or that the certificate
+is already in the store.
+
+Observe the 16 EM certificates are distrusted:
+
+inetcpl.cpl > Content > Certificates > Untrusted Publishers
+
+or as admin:
+
+certmgr.msc > Untrusted Certificates > Certificates
+
+          "EM DV TLS CA - G3B",
+          "EM DV TLS CA - G3B",
+          "EM DV TLS CA - G3C",
+          "EM DV TLS CA - G3C",
+          "EM EV TLS CA - G3B",
+          "EM EV TLS CA - G3B",
+          "EM EV TLS CA - G3C",
+          "EM EV TLS CA - G3C",
+          "EM OV CS CA - G3B",
+          "EM OV CS CA - G3B",
+          "EM OV CS CA - G3C",
+          "EM OV CS CA - G3C",
+          "EM OV TLS CA - G3B",
+          "EM OV TLS CA - G3B",
+          "EM OV TLS CA - G3C",
+          "EM OV TLS CA - G3C",
+
+Sometimes they can take a few seconds to appear so you may have to switch to
+another certificate list and then switch back to see the untrusted list updated
+with the new entries.
