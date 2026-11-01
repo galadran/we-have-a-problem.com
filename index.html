@@ -315,11 +315,14 @@ curl https://dv-g3b-aaa-noct-emudhra.we-have-a-problem.com/</pre>
 <p>Back up the file:</p>
 <pre translate="no">[ -e /etc/ssl/cert.pem.orig ] || sudo cp -p /etc/ssl/cert.pem /etc/ssl/cert.pem.orig</pre>
 
-<p>Remove emSign ECC Root CA - G3. This prints nothing on success:</p>
+<p>Remove emSign ECC Root CA - G3:</p>
 <pre translate="no">t=$(mktemp) &amp;&amp;
 awk -v s='=== /C=IN/OU=emSign PKI/O=eMudhra Technologies Limited/CN=emSign ECC Root CA - G3' \
   '/^(===|###) /{skip=0} $0==s{skip=1} !skip' /etc/ssl/cert.pem &gt; "$t" &amp;&amp;
 [ -s "$t" ] &amp;&amp; sudo install -m 0644 -o root -g wheel "$t" /etc/ssl/cert.pem; rm -f "$t"</pre>
+
+<p>This prints nothing on success. To see what has been removed:</p>
+<pre translate="no">diff -u /etc/ssl/cert.pem.orig /etc/ssl/cert.pem</pre>
 
 <p>This does not block the six Sectigo cross-signed intermediates, which chain to AAA Certificate Services. To block those too, also remove that root. This may break verification of unaffected websites that chain to AAA Certificate Services:</p>
 <pre translate="no">t=$(mktemp) &amp;&amp;
