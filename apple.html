@@ -36,6 +36,7 @@
     .back { margin: -1rem 0 1rem; text-align: right; }
     @media (min-width: 30rem) { .back { margin-top: -3rem; } }
     .date { text-align: center; }
+    .fixed { padding: .5rem 1rem; border-left: .25rem solid #090; background: #f0f9f0; }
   </style>
 </head>
 <body>
@@ -46,6 +47,8 @@
 <h1>Apple's git still trusts the compromised eMudhra certificates</h1>
 
 <p class="date"><strong>28th October 2026</strong></p>
+
+<p class="fixed"><strong>Update, 10th November:</strong> Apple has <a href="https://support.apple.com/en-us/149555">fixed the issue</a> in macOS 27.2.1, 26.7.3, and 15.8.3. Update macOS, then confirm the fix with the <a href="./#check-git">checks on the main page</a>. The rest of this page is preserved as originally published on 28th October.</p>
 
 <p>Apple was notified of the eMudhra incident on 17th October. As of 28th October, the developer tools Apple ships with macOS, including git, curl and python3, still trust the compromised certificates.</p>
 

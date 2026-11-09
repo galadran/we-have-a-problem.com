@@ -78,7 +78,7 @@
     .good { color: #090; }
     .bad { color: #c00; }
     .pending { color: #999; }
-    .update { padding: .5rem 1rem; border-left: .25rem solid #c00; background: #fdf2f2; }
+    .update { padding: .5rem 1rem; border-left: .25rem solid #0074d9; background: #eef5fc; }
     abbr[title] { cursor: help; }
     .hint[title] { cursor: help; text-decoration: underline dotted; }
     small { color: #808080; }
@@ -96,7 +96,7 @@
 
 <p style="text-align: center"><strong>20th October 2026</strong></p>
 
-<p class="update"><strong>Update, 28th October:</strong> the developer tools Apple ships with macOS, including <code translate="no">git</code>, <code translate="no">curl</code> and <code translate="no">python3</code>, still trust the compromised certificates, and macOS 27.2 undid user-applied fixes. <a href="apple.html">Read more.</a></p>
+<p class="update"><strong>Update, 10th November:</strong> Apple has fixed the <a href="apple.html">macOS developer tools issue</a> in macOS 27.2.1, 26.7.3, and 15.8.3.</p>
 
 <p>The private keys of eight eMudhra intermediate CA certificates have been compromised. They chain to roots trusted by the Mozilla, Microsoft, Apple and Chrome root programs and by many downstream trust stores.</p>
 
@@ -149,6 +149,24 @@ curl https://dv-g3b-aaa-noct-emudhra.we-have-a-problem.com/</pre>
 <p>Most browsers enforce CT, but many non-browser clients, including curl, do not which places them at greater risk.</p>
 
 <p>To check a trust store offline, <a href="chains.zip">chains.zip</a> contains the certificate chain served by each of the fourteen hosts above in PEM format, plus some additional test cases and instructions for verifying them with OpenSSL.</p>
+
+<h3 id="check-git"><a href="#check-git">Does your git still trust the compromised intermediates?</a></h3>
+
+<p>If git trusts the compromised intermediates, anyone on the network can intercept its HTTPS connections. Clones and pulls from <code translate="no">https://</code> remotes can deliver attacker-chosen code, pushes can be altered in transit, and credentials such as GitHub tokens can be stolen.</p>
+
+<p>To check whether your git is affected, run:</p>
+<pre translate="no">git ls-remote https://git-emudhra.we-have-a-problem.com/check.git</pre>
+<p>A certificate error means your git is protected. If git lists a commit, your git is affected. Your connections to GitHub, or any other <code translate="no">https://</code> git remote, can be intercepted and tampered with.</p>
+
+<p>To see an attack end to end, run the command below in a temporary directory. It clones a repository from a test server impersonating GitHub. The <code translate="no">-c</code> option redirects <code translate="no">github.com</code> to our test server for this one command only. The server presents a <code translate="no">github.com</code> certificate issued by one of the compromised eMudhra intermediates.</p>
+<pre translate="no">git -c http.curloptResolve=github.com:443:15.235.19.186 clone https://fake-user@github.com/galadran/emudhra-git-test</pre>
+
+<p>A protected git will refuse with a certificate error. If the clone succeeds, you'll see a <code translate="no">README.md</code> starting with <strong>INTERCEPTED</strong>.</p>
+
+<p>A real attacker would not need the extra option. Anyone on the network path between you and GitHub can redirect your traffic themselves.</p>
+
+<p>You can replace the demo repository with any other, public or private. Keep the <code translate="no">fake-user@</code> prefix. Without it, git would send your GitHub credentials to the test server. For example:</p>
+<pre translate="no">git -c http.curloptResolve=github.com:443:15.235.19.186 clone https://fake-user@github.com/Homebrew/brew</pre>
 
 <h2 id="cause"><a href="#cause">What is known about the cause?</a></h2>
 
@@ -312,7 +330,9 @@ curl https://dv-g3b-aaa-noct-emudhra.we-have-a-problem.com/</pre>
 <details class="workaround" id="macos-curl">
 <summary><h4>macOS curl, git, and Python</h4></summary>
 
-<p>macOS blocks the compromised intermediates in apps that use Apple's networking and security frameworks. However, the built-in command line tools verify certificates against <code translate="no">/etc/ssl/cert.pem</code> without checking revocation. Apple has <a href="https://support.apple.com/en-us/149555">stated</a> it will update that file in a future macOS update. Until then, you can remove the affected roots yourself.</p>
+<p><strong>Fixed in macOS 27.2.1, 26.7.3, and 15.8.3.</strong> Update macOS and <a href="#check-git">check</a> that the fix has applied. See Apple's <a href="https://support.apple.com/en-us/149555">release notes</a> for details. The steps below are only needed on unpatched versions. If you already applied them, it is safe to leave them in place.</p>
+
+<p>macOS blocks the compromised intermediates in apps that use Apple's networking and security frameworks. However, on unpatched versions, the built-in command line tools verify certificates against <code translate="no">/etc/ssl/cert.pem</code> without checking revocation. If you cannot update, you can remove the affected roots yourself.</p>
 
 <p>Back up the file:</p>
 <pre translate="no">[ -e /etc/ssl/cert.pem.orig ] || sudo cp -p /etc/ssl/cert.pem /etc/ssl/cert.pem.orig</pre>
@@ -335,8 +355,6 @@ awk -v s='=== /C=GB/ST=Greater Manchester/L=Salford/O=Comodo CA Limited/CN=AAA C
 <p>Check the result. This lists either root if it is still in the file, and prints nothing if both were removed. If it shows an error, restore the backup:</p>
 <pre translate="no">openssl crl2pkcs7 -nocrl -certfile /etc/ssl/cert.pem | openssl pkcs7 -print_certs -noout |
   grep -E 'emSign ECC Root CA - G3|AAA Certificate Services'</pre>
-
-<p>Apple has warned that until it ships its own fix, a macOS update may replace <code translate="no">/etc/ssl/cert.pem</code>. You may need to repeat these steps after each update.</p>
 
 <p>The built-in <code translate="no">pip3</code>, and the <code translate="no">pip</code> in virtual environments created from the built-in <code translate="no">python3</code>, use their own outdated copy of the roots instead. To make them use the fixed system file, run:</p>
 <pre translate="no">F="$(/usr/bin/python3 -c 'import sysconfig; print(sysconfig.get_path("stdlib"))')/sitecustomize.py" &amp;&amp;
