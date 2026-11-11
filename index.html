@@ -432,6 +432,25 @@ update-ca-trust</pre>
 <p>The script imports its 16 compromised intermediates and cross-signs into <code translate="no">LocalMachine\Disallowed</code> (Untrusted Certificates).</p>
 
 <p>This mitigation applies to clients using the Windows operating system certificate trust stores and chain validation (including Schannel TLS and Authenticode). It adds blocks to Untrusted Certificates without modifying Trusted Root Certification Authorities. Applications using independent CA bundles still need their own updates.</p>
+
+</details>
+
+<details class="workaround" id="windows-legacy">
+<summary><h4>Windows (Legacy)</h4></summary>
+
+<p>Old versions of Windows may not have PowerShell 5.1 or later to run the script in the Windows workaround section. For those legacy versions of Windows you can download an alternative script windows_legacy_block_certs.bat which is included in <a href="https://github.com/galadran/we-have-a-problem.com/raw/refs/heads/main/eMudhra_compromised_certs.zip">eMudhra_compromised_certs.zip</a>. Run the script from an administrator command prompt in the same directory as the certificates. It will attempt to add the 16 compromised intermediate certificates to Untrusted Certificates and it will tell you whether or not it was successful.</p>
+
+<p>You can also observe the 16 certificates to confirm:<br>
+<br>
+inetcpl.cpl > Content > Certificates > Untrusted Publishers<br>
+<br>
+or as admin:<br>
+<br>
+certmgr.msc > Untrusted Certificates > Certificates<br>
+</p>
+
+<p>* Sometimes newly added certificates can take a few seconds to appear in the untrusted list. You may need to close and reopen the certificates window, or refresh via F5 in certificate manager, to see the certificates in the list.</p>
+
 </details>
 
 <details class="workaround" id="android">
