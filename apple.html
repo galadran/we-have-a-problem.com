@@ -43,6 +43,7 @@
     .translation p:last-child { margin: 0; }
     .test-note { border: 1px solid #b7791f; border-left-width: 5px; border-radius: .4rem; background: #fffaf0; padding: .75rem 1rem; margin-bottom: 1rem; }
     .test-note p:last-child { margin-bottom: 0; }
+    .fixed { padding: 0.5rem 1rem; border-left: 0.25rem solid #090; background: #f0f9f0; }
   </style>
 </head>
 <body>
@@ -54,6 +55,17 @@
 <p class="back"><small><a href="./">← メインページ</a></small></p>
 <h1>Appleのgitは侵害されたeMudhra証明書をまだ信頼している</h1>
 <p class="date"><strong>2026年10月28日</strong></p>
+<p class="fixed">
+  <strong>11月10日更新：</strong>
+  Appleは、
+  <a href="https://support.apple.com/en-us/149555">
+    macOS 27.2.1、26.7.3、および15.8.3でこの問題を修正しました
+  </a>。
+  macOSを更新した後、
+  <a href="./#check-git">メインページの確認手順</a>
+  で修正が適用されていることを確認してください。
+  以下の内容は、2026年10月28日の初回公開時点の記録として残しています。
+</p>
 <p>Appleには、10月17日にeMudhraのインシデントが通知されました。しかし10月28日時点でも、AppleがmacOSに同梱する開発者向けツールのうち、git、curl、python3などは、侵害された証明書をまだ信頼していました。</p>
 <p>さらに、10月26日に公開されたmacOS 27.2でも問題は修正されず、利用者が手作業で適用していた回避策が元に戻されたため、再び影響を受ける状態になりました。</p>
 <p>その一方で、ボランティア主体のものを含む<a href="./#developers">多数の他プロジェクト</a>は、すでに数日前に修正版を提供していました。</p>

@@ -82,7 +82,7 @@ window.CHECKER_STRINGS = {
     .good { color: #090; }
     .bad { color: #c00; }
     .pending { color: #999; }
-    .update { padding: .5rem 1rem; border-left: .25rem solid #c00; background: #fdf2f2; }
+    .update { padding: .5rem 1rem; border-left: .25rem solid #0074d9; background: #eef5fc; }
     abbr[title] { cursor: help; }
     .hint[title] { cursor: help; text-decoration: underline dotted; }
     small { color: #808080; }
@@ -138,13 +138,31 @@ html[lang="ja"] { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "H
 <body>
 <div class="container">
 <div class="translation" role="note">
-<p>このサイトは，<a href="https://github.com/Tskikoh">Tskikoh</a>が2026年10月28日時点の英語版を日本語に翻訳したものです。最新の情報や詳しい情報は，<a href="https://emudhra.we-have-a-problem.com/?lang=en" hreflang="en">英語版</a>をご覧ください。</p>
-<p lang="en">This site was translated into Japanese by <a href="https://github.com/Tskikoh">Tskikoh</a> from the English page as of 28th October 2026. For the latest and more detailed information, see the <a href="https://emudhra.we-have-a-problem.com/?lang=en">English page</a>.</p>
+<p>
+  このサイトは，
+  <a href="https://github.com/Tskikoh">Tskikoh</a>が
+  2026年11月10日時点の英語版を日本語に翻訳したものです。
+  最新の情報や詳しい情報は，
+  <a href="https://emudhra.we-have-a-problem.com/?lang=en"
+     hreflang="en">英語版</a>をご覧ください。
+</p>
+<p lang="en">
+  This site was translated into Japanese by
+  <a href="https://github.com/Tskikoh">Tskikoh</a>
+  from the English page as of 10th November 2026.
+  For the latest and more detailed information, see the
+  <a href="https://emudhra.we-have-a-problem.com/?lang=en">English page</a>.
+</p>
 </div>
 <p class="lang"><small><a href="https://emudhra.we-have-a-problem.com/?lang=en" hreflang="en" lang="en">English</a> / 日本語</small></p>
 <h1>eMudhra中間CA証明書の秘密鍵侵害</h1>
 <p style="text-align: center"><strong>2026年10月20日</strong></p>
-<p class="update"><strong>10月28日更新：</strong> AppleがmacOSに同梱する開発者向けツール（<code translate="no">git</code>、<code translate="no">curl</code>、<code translate="no">python3</code>など）は、現在も侵害された証明書を信頼しています。また、macOS 27.2では利用者が適用した修正が元に戻ることが確認されています。 <a href="apple.html">詳細を見る。</a></p>
+<p class="update">
+  <strong>11月10日更新：</strong>
+  Appleは、
+  <a href="./apple.html">macOS開発者向けツールの問題</a>
+  をmacOS 27.2.1、26.7.3、および15.8.3で修正しました。
+</p>
 <p>eMudhraの中間CA証明書8件の秘密鍵が侵害されました。これらはMozilla、Microsoft、Apple、Chromeの各ルートプログラム、および多数の下流トラストストアで信頼されているルート証明書へチェーンします。</p>
 <p>ルートプログラムは、OSやブラウザーのベンダーが認証局を審査し、自社製品で信頼する認証局を決定する仕組みです。トラストストアは、OS、ブラウザー、言語ランタイム、ライブラリ、アプリケーションが証明書検証に使用する信頼済みルート証明書の一覧で、その多くはルートプログラムの一覧を基にしています。</p>
 <h2 id="proof"><a href="#proof">どのように確認されたのか</a></h2>
@@ -197,6 +215,69 @@ curl https://dv-g3b-aaa-emudhra.we-have-a-problem.com/</pre>
 <p>いずれの場合も、証明書エラーではなく、DNS障害、接続タイムアウト、プロキシによる遮断などで失敗する可能性があります。詳しいエラーを確認するには、<code translate="no">curl -v</code>を使用してください。</p>
 <p>多くのブラウザーはCTを必須としますが、curlを含むブラウザー以外のクライアントの多くはCTを強制しないため、CT未登録の証明書を受け入れるクライアントは、より大きなリスクがあります。</p>
 <p>トラストストアをオフラインで確認する場合、<a href="chains.zip">chains.zip</a>には検証用の証明書チェーン、追加テストケース、OpenSSLでの検証手順が含まれています。</p>
+<h3 id="check-git">
+  <a href="#check-git">
+    お使いのgitは侵害された中間CAをまだ信頼しているか
+  </a>
+</h3>
+
+<p>
+  gitが侵害された中間CAを信頼している場合、
+  ネットワーク経路上の第三者がHTTPS接続を中継できます。
+  <code translate="no">https://</code>リモートからのcloneやpullでは、
+  攻撃者が選んだコードを送り込まれる可能性があります。
+  pushの内容を通信途中で改変されたり、
+  GitHubトークンなどの認証情報を盗まれたりする可能性もあります。
+</p>
+
+<p>お使いのgitが影響を受けるか確認するには、次を実行します。</p>
+
+<pre translate="no">git ls-remote https://git-emudhra.we-have-a-problem.com/check.git</pre>
+
+<p>
+  証明書エラーになれば、そのgitは保護されています。
+  コミット情報が表示された場合、そのgitは影響を受けています。
+  GitHubを含む任意の
+  <code translate="no">https://</code>
+  リモートへの接続が中継・改変される可能性があります。
+</p>
+
+<p>
+  攻撃を一連の流れで確認するには、一時ディレクトリで次を実行します。
+  このコマンドは、GitHubになりすましたテストサーバーから
+  リポジトリをcloneします。
+  <code translate="no">-c</code>オプションは、この1回のコマンドに限り、
+  <code translate="no">github.com</code>をテストサーバーへ転送します。
+  テストサーバーは、侵害されたeMudhra中間CAの1つによって発行された
+  <code translate="no">github.com</code>用証明書を提示します。
+</p>
+
+<pre translate="no">git -c http.curloptResolve=github.com:443:15.235.19.186 clone https://fake-user@github.com/galadran/emudhra-git-test</pre>
+
+<p>
+  保護されたgitは証明書エラーで接続を拒否します。
+  cloneに成功した場合は、先頭が
+  <strong>INTERCEPTED</strong>
+  となっている
+  <code translate="no">README.md</code>
+  が表示されます。
+</p>
+
+<p>
+  実際の攻撃者は追加のオプションを必要としません。
+  利用者とGitHubの間のネットワーク経路上にいる者は、
+  自ら通信を転送できます。
+</p>
+
+<p>
+  デモ用リポジトリは、公開・非公開を問わず別のリポジトリへ
+  置き換えられます。
+  <code translate="no">fake-user@</code>の部分は残してください。
+  これを省くと、gitがGitHubの認証情報をテストサーバーへ
+  送信する可能性があります。
+</p>
+
+<pre translate="no">git -c http.curloptResolve=github.com:443:15.235.19.186 clone https://fake-user@github.com/Homebrew/brew</pre>
 <h2 id="cause"><a href="#cause">原因について判明していること</a></h2>
 <p>中間証明書の秘密鍵は、認証局によって誤った方法で生成されました。そのため、誰でも証明書から秘密鍵を復元できます。</p>
 <p>この復元は、証明書が作成された2025年4月以降可能だったと考えられます。その期間、これらの中間証明書はCertificate Transparencyログに記録されていません。したがって、Firefox、Chrome、Edge、SafariなどCTを必須とするクライアントは攻撃対象にならなかったと考えられます。</p>
@@ -331,7 +412,30 @@ curl https://dv-g3b-aaa-emudhra.we-have-a-problem.com/</pre>
 <h3 id="workarounds"><a href="#workarounds">修正版が提供されるまでの回避策</a></h3>
 <details class="workaround" id="macos-curl">
 <summary><h4>macOSのcurl、git、Python</h4></summary>
-<p>macOSでは、Appleのネットワークおよびセキュリティフレームワークを使用するアプリケーションについて、侵害された中間CAがブロックされています。一方、組み込みのコマンドラインツールは、失効確認を行わずに<code translate="no">/etc/ssl/cert.pem</code>を使用して証明書を検証します。Appleは、今後のmacOSアップデートでこのファイルを更新すると<a href="https://support.apple.com/en-us/149555">案内しています</a>。それまでは、影響を受けるルート証明書を利用者自身で削除できます。</p>
+<p>
+  <strong>
+    macOS 27.2.1、26.7.3、および15.8.3で修正済みです。
+  </strong>
+  macOSを更新し、
+  <a href="#check-git">確認手順</a>
+  で修正が適用されていることを確認してください。
+  詳細はAppleの
+  <a href="https://support.apple.com/en-us/149555">リリースノート</a>
+  を参照してください。
+  以下の手順が必要なのは未修正バージョンだけです。
+  すでに適用済みの場合は、そのまま残しても問題ありません。
+</p>
+<p>
+  macOSでは、Appleのネットワークおよびセキュリティフレームワークを
+  使用するアプリケーションについて、侵害された中間CAが
+  ブロックされています。
+  一方、未修正バージョンの組み込みコマンドラインツールは、
+  失効確認を行わずに
+  <code translate="no">/etc/ssl/cert.pem</code>
+  を使用して証明書を検証します。
+  macOSを更新できない場合は、影響を受けるルート証明書を
+  利用者自身で削除できます。
+</p>
 <p>ファイルをバックアップします。</p>
 <pre translate="no">[ -e /etc/ssl/cert.pem.orig ] || sudo cp -p /etc/ssl/cert.pem /etc/ssl/cert.pem.orig</pre>
 <p><strong>emSign ECC Root CA - G3</strong>を削除します。</p>
@@ -349,7 +453,6 @@ awk -v s='=== /C=GB/ST=Greater Manchester/L=Salford/O=Comodo CA Limited/CN=AAA C
 <p>結果を確認します。どちらかのルート証明書がファイルに残っていれば表示され、両方とも削除されていれば何も表示されません。エラーが表示された場合は、バックアップから復元してください。</p>
 <pre translate="no">openssl crl2pkcs7 -nocrl -certfile /etc/ssl/cert.pem | openssl pkcs7 -print_certs -noout |
   grep -E 'emSign ECC Root CA - G3|AAA Certificate Services'</pre>
-<p>Appleは、公式の修正が提供されるまで、macOSアップデートによって<code translate="no">/etc/ssl/cert.pem</code>が置き換わる可能性があると注意喚起しています。アップデートのたびに、この手順を再実行する必要がある場合があります。</p>
 <p>組み込みの<code translate="no">pip3</code>と、組み込みの<code translate="no">python3</code>から作成した仮想環境内の<code translate="no">pip</code>は、別途、古いルート証明書のコピーを使用します。修正済みのシステムファイルを使用させるには、次を実行します。</p>
 <pre translate="no">F="$(/usr/bin/python3 -c 'import sysconfig; print(sysconfig.get_path("stdlib"))')/sitecustomize.py" &amp;&amp;
 echo 'import os; os.environ.setdefault("PIP_CERT", "/etc/ssl/cert.pem")' | sudo tee -a "$F" &gt; /dev/null &amp;&amp;
